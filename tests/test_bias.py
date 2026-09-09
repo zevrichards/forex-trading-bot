@@ -1,6 +1,6 @@
 """
 Hand-built candle sequences with known, verified swing points, used to check
-classify_trend() against Valentino's definition:
+classify_trend() against the trader's definition:
 
     "Bullish trend = HH + HL. Bearish trend = LL + LH."
 

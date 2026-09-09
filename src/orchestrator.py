@@ -14,16 +14,28 @@ minute) instead.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from . import decision_engine, filters, trade_manager
 from .models import Bias, MarketState, Trend
-from .relay_poller import JSONFileRelaySource, RelaySource
+from .relay_poller import GoogleSheetRelaySource, JSONFileRelaySource, RelaySource
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("orchestrator")
 
 RELAY_FILE_PATH = "relay_data.json"
+
+# The real relay: a manually-maintained Google Sheet (see docs/relay-setup.md).
+# Overridable via env vars so the credentials path isn't hard-pinned to one
+# machine; defaults match the current dev setup.
+GOOGLE_SHEET_ID = os.environ.get(
+    "RELAY_SHEET_ID", "1sSRvV4jK9GGX5fSc1vGknQOcdyiAGAvXRJGTRMk95C4"
+)
+GOOGLE_SHEET_CREDENTIALS_PATH = os.environ.get(
+    "RELAY_SHEET_CREDENTIALS_PATH", "forex-trading-bot-508116-b2c039d424d0.json"
+)
+
 HIGH_IMPACT_NEWS_EVENTS: list[datetime] = []  # TODO: wire up a real economic calendar source
 
 
@@ -70,12 +82,21 @@ def evaluate_once(state: MarketState) -> None:
 
 
 if __name__ == "__main__":
-    # Manual smoke-test entry point. Requires relay_data.json to exist
-    # (see relay_poller.JSONFileRelaySource) and hard-codes bias/trend/price
-    # for now, since the candle-history fetch and webhook receiver aren't
-    # wired into this loop yet.
+    # Manual smoke-test entry point. Reads from the real Google Sheet relay
+    # (see docs/relay-setup.md) and hard-codes bias/trend/price for now,
+    # since the candle-history fetch and webhook receiver aren't wired into
+    # this loop yet. Set RELAY_SOURCE=json to fall back to relay_data.json
+    # (relay_poller.JSONFileRelaySource) for offline/local testing instead.
+    if os.environ.get("RELAY_SOURCE") == "json":
+        relay_source = JSONFileRelaySource(RELAY_FILE_PATH)
+    else:
+        relay_source = GoogleSheetRelaySource(
+            sheet_id=GOOGLE_SHEET_ID,
+            credentials_path=GOOGLE_SHEET_CREDENTIALS_PATH,
+        )
+
     demo_state = build_market_state(
-        relay_source=JSONFileRelaySource(RELAY_FILE_PATH),
+        relay_source=relay_source,
         current_price=1.15700,
         weekly_bias=Bias.BULLISH,
         daily_bias=Bias.BULLISH,

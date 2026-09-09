@@ -1,5 +1,5 @@
 """
-Entry decision logic — the direct translation of Valentino's rules:
+Entry decision logic — the direct translation of the trader's rules:
 
     "BUY when price touches buy-side liquidity while below Value."
     "SELL when price touches sell-side liquidity while above Value."
@@ -10,9 +10,9 @@ This module makes NO decision about position size or stop placement — that's
 risk_sizing.py and stop_placement.py. It answers exactly one question: given
 the current market state, is this a BUY, a SELL, or not a trade, and why.
 
-Every branch below is commented with which of his rules it enforces, so this
-stays auditable against his written spec rather than a black box — per his
-"no assumptions or approximations" instruction.
+Every branch below is commented with which of the trader's rules it
+enforces, so this stays auditable against their written spec rather than a
+black box — per their "no assumptions or approximations" instruction.
 """
 
 from __future__ import annotations

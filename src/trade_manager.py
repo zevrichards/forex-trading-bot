@@ -101,7 +101,7 @@ def trail_stop(current_stop: float, proposed_stop: float, direction: Direction) 
 def _trail_stop(position: Position, state: MarketState) -> float | None:
     """PLACEHOLDER trailing logic.
 
-    Valentino's actual rule ("after price establishes a new higher-low ->
+    The trader's actual rule ("after price establishes a new higher-low ->
     higher-high, move the stop below the newly established higher-low") requires
     swing-point detection this module deliberately does not implement yet — see
     README "Open questions: swing-point detection for trailing." Wiring this up

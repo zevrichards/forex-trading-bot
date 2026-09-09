@@ -10,9 +10,9 @@ bias, Daily candles for daily bias).
 This uses a standard fractal swing-point method (a candle whose high is the
 highest of its `lookback` neighbors on each side counts as a swing high; low
 is the mirror). It is a reasonable, common definition, but it is Claude's
-implementation choice, not something Valentino specified numerically — flag
-this to him and confirm it matches what he'd call a swing point by eye
-before trusting it for live trading. See README "Open questions."
+implementation choice, not something the trader specified numerically —
+flag this to them and confirm it matches what they'd call a swing point by
+eye before trusting it for live trading. See README "Open questions."
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def find_swing_lows(candles: list[Candle], lookback: int = DEFAULT_LOOKBACK) -> 
 
 def classify_trend(candles: list[Candle], lookback: int = DEFAULT_LOOKBACK) -> Trend:
     """Looks at the two most recent swing highs and two most recent swing
-    lows and classifies the trend per Valentino's definition. Returns
+    lows and classifies the trend per the trader's definition. Returns
     NEUTRAL if there isn't enough clean structure yet (fewer than two of
     either), or if highs and lows disagree (e.g. higher high but lower low —
     a genuinely ambiguous market the decision engine should sit out of

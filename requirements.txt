@@ -2,7 +2,7 @@ pytest>=8.0
 fastapi>=0.110
 uvicorn>=0.29
 pydantic>=2.6
-# Not yet used by any code, but on the list for when relay_poller's Google
-# Sheet implementation and the real broker integration get built:
-# gspread>=6.0
-# google-auth>=2.29
+gspread>=6.0
+google-auth>=2.29
+# Not yet used by any code, but on the list for when the real broker
+# integration gets built.

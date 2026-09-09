@@ -1,8 +1,8 @@
 """
-Position sizing — the one part of Valentino's rules that was already a precise
-formula, not a chart-reading judgment call.
+Position sizing — the one part of the trader's rules that was already a
+precise formula, not a chart-reading judgment call.
 
-Rule, verbatim from his message:
+Rule, verbatim from their message:
     "Your account is $100,000. Your maximum risk per trade: 0.5%. Therefore:
     Maximum loss = $500. That's the number we protect. Not the lot size.
     Not the number of pips. $500 is the risk budget."
@@ -10,14 +10,14 @@ Rule, verbatim from his message:
     "For EUR/USD, approximately: 1 standard lot = $10 per pip.
     Lot size = $500 / (stop-loss pips x $10)"
 
-Every value in his worked lookup table is reproduced as a test in
+Every value in the trader's worked lookup table is reproduced as a test in
 tests/test_risk_sizing.py — this file exists to match that table exactly,
 not to approximate it.
 """
 
 from __future__ import annotations
 
-DEFAULT_RISK_PCT = 0.005  # 0.5%, "with no exceptions" per his rules
+DEFAULT_RISK_PCT = 0.005  # 0.5%, "with no exceptions" per the trader's rules
 DEFAULT_PIP_VALUE_PER_LOT = 10.0  # approx. USD per pip per standard lot on EUR/USD
 
 
@@ -63,12 +63,12 @@ def exceeds_risk_budget(
     corrupted lot size can never silently exceed the risk budget.
 
     Tolerance note: this caught a real bug during testing. calculate_lot_size
-    rounds to the nearest 0.01 lot (matching Valentino's own table, e.g. 30
+    rounds to the nearest 0.01 lot (matching the trader's own table, e.g. 30
     pips -> 1.67 lots), but lots can only be sized in 0.01 steps at all, so
     hitting the risk budget exactly is generally impossible -- 1.67 lots on a
     30-pip stop is actually $501, one dollar over $500, purely from rounding
     to the nearest tradeable lot size. A near-zero float tolerance flagged
-    that as "exceeds," which would reject his own worked example. The
+    that as "exceeds," which would reject their own worked example. The
     tolerance below is deliberately set to half a lot-step's worth of risk,
     so it accepts unavoidable rounding but still catches anything genuinely
     oversized (e.g. a stray extra lot).

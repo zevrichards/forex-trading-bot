@@ -1,5 +1,5 @@
 """
-Pre-trade filters — the parts of Valentino's rules that gate whether to even
+Pre-trade filters — the parts of the trader's rules that gate whether to even
 look for a trade, independent of the technical setup itself.
 
     "Trading days: Monday-Friday."
@@ -9,7 +9,7 @@ look for a trade, independent of the technical setup itself.
 All datetimes in this module are assumed to be timezone-aware and in UTC —
 callers must convert before passing in. Session boundaries below are a
 reasonable placeholder (standard London/New York hours, not adjusted for
-each side's own DST) and should be confirmed with Valentino rather than
+each side's own DST) and should be confirmed with the trader rather than
 trusted as exact — see README "Open questions."
 """
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 
 # PLACEHOLDER boundaries in UTC — confirm real session times (and whether
-# DST should shift them) with Valentino before relying on these for live trading.
+# DST should shift them) with the trader before relying on these for live trading.
 LONDON_SESSION = (time(7, 0), time(16, 0))
 NEW_YORK_SESSION = (time(12, 0), time(21, 0))
 

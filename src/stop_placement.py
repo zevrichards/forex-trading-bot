@@ -5,9 +5,9 @@ Initial stop placement.
     determined buffer."
 
 ob_projection_level is a relayed ATS value (see models.MarketState). The
-buffer is a config value, not a chart-read one — Valentino called it
+buffer is a config value, not a chart-read one — the trader called it
 "manually determined," so it's exposed here as a parameter rather than
-hard-coded, and should be confirmed with him directly (see README "Open
+hard-coded, and should be confirmed with them directly (see README "Open
 questions").
 """
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from .models import Direction
 
-DEFAULT_BUFFER_PIPS = 2.0  # PLACEHOLDER — confirm the real number with Valentino
+DEFAULT_BUFFER_PIPS = 2.0  # PLACEHOLDER — confirm the real number with the trader
 PIP_SIZE = 0.0001  # EUR/USD; JPY pairs would use 0.01, not used here but noted for reuse
 
 

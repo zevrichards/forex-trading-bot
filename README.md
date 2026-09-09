@@ -1,16 +1,16 @@
 # EUR/USD Bot — v1 Skeleton
 
 This is the first real slice of code, not a prototype of everything.
-It builds and tests every part of Valentino's rules that doesn't depend on
-an unresolved integration question, and clearly stubs the two that do
-(the ATS relay, and the TradingView webhook) so nothing about them is
-guessed at.
+It builds and tests every part of the trader's rules that doesn't depend on
+an unresolved integration question, and clearly stubs the parts that do
+(the ATS relay's Google Sheet setup, and the TradingView webhook) so
+nothing about them is guessed at.
 
-## What's built and tested (45 passing tests)
+## What's built and tested (55 passing tests)
 
-| Rule (his words) | Module | Tested against |
+| Rule (the trader's words) | Module | Tested against |
 |---|---|---|
-| "$500 risk budget... Lot size = $500 / (stop pips x $10)" | `risk_sizing.py` | Every row of his own lookup table, exactly |
+| "$500 risk budget... Lot size = $500 / (stop pips x $10)" | `risk_sizing.py` | Every row of the trader's own lookup table, exactly |
 | "BUY when price touches buy-side liquidity while below Value... SELL... above Value" | `decision_engine.py` | Clean buy/sell cases, wait cases, and a regression test that the two conditions are ANDed, not ORed |
 | "Weekly + Daily bias must agree... Trend must agree with the bias" | `decision_engine.py` | Conflicting/neutral bias, trend disagreement |
 | "Bullish trend = HH + HL. Bearish trend = LL + LH." | `bias.py` | Hand-built, hand-verified candle sequences for bullish, bearish, insufficient structure, and a genuinely conflicting (ambiguous) case |
@@ -23,23 +23,28 @@ guessed at.
 
 Run the tests yourself: `pip install -r requirements.txt && pytest -v`
 
-One real bug got caught during this build, worth knowing about: his own
-worked example (30 pips -> 1.67 lots) technically risks $501, one dollar
-over the $500 budget, purely from rounding to the nearest tradeable 0.01
-lot. The risk-budget guard was originally too strict and would have
-rejected his own example. Fixed by tolerating half a lot-step's worth of
-unavoidable rounding — see the comment in `risk_sizing.py` for the full
-reasoning. This is exactly the kind of thing testing against his real
-numbers was for.
+One real bug got caught during this build, worth knowing about: the
+trader's own worked example (30 pips -> 1.67 lots) technically risks $501,
+one dollar over the $500 budget, purely from rounding to the nearest
+tradeable 0.01 lot. The risk-budget guard was originally too strict and
+would have rejected their own example. Fixed by tolerating half a
+lot-step's worth of unavoidable rounding — see the comment in
+`risk_sizing.py` for the full reasoning. This is exactly the kind of thing
+testing against their real numbers was for.
 
-## What's stubbed, and why
+## What's live
 
 **`relay_poller.py`** — reading the ATS Box/liquidity/OB-projection numbers.
 Confirmed via live testing that these can't be read from ATS
 programmatically (see the WhatsApp conversation history / plan docs for
-the screen-share findings). `JSONFileRelaySource` works today for local
-testing. `GoogleSheetRelaySource` is a real interface with no
-implementation yet — build the Google Form + Sheet, then wire this up.
+the screen-share findings). `GoogleSheetRelaySource` reads the last row of
+a manually-maintained Google Sheet (no Form, values are typed in directly)
+via `gspread`, and has been run successfully end-to-end against the real
+Sheet — see `docs/relay-setup.md` for the setup. `JSONFileRelaySource`
+still works for offline/local testing (`RELAY_SOURCE=json`). The Sheet
+currently holds placeholder/test values, not real ATS numbers yet.
+
+## What's stubbed, and why
 
 **`webhook_receiver.py`** — receiving ATS MTF Trend V1's bias signal, which
 *is* confirmed live-readable. The endpoint works (tested), but the
@@ -66,17 +71,16 @@ script's actual alert message template exists.
    uses a standard fractal method (candle is a swing point if it's the
    most extreme of its 2 neighbors on each side) for weekly/daily trend
    classification, which is a Claude judgment call, not something
-   Valentino specified numerically. Worth confirming with him that this
-   matches what he'd call a swing point by eye, especially before
+   the trader specified numerically. Worth confirming with them that this
+   matches what they'd call a swing point by eye, especially before
    `trade_manager._trail_stop()` gets built for real on top of it.
 2. **Session hours.** `filters.py`'s London (07:00-16:00 UTC) and New York
    (12:00-21:00 UTC) windows are standard placeholders, not confirmed with
-   him, and don't account for daylight saving shifts on either side.
+   the trader, and don't account for daylight saving shifts on either side.
 3. **Stop buffer size.** `stop_placement.py`'s `DEFAULT_BUFFER_PIPS = 2.0`
-   is a placeholder for what he called a "small manually determined
-   buffer" — get an actual number (or a rule for choosing one) from him.
-4. **Relay mechanism.** Google Form -> Sheet was the plan; not built yet.
-5. **News calendar source.** Needs an actual feed (a scraped calendar, a
+   is a placeholder for what the trader called a "small manually determined
+   buffer" — get an actual number (or a rule for choosing one) from them.
+4. **News calendar source.** Needs an actual feed (a scraped calendar, a
    paid API) to populate the blackout list — nothing chosen yet.
 
 ## Project layout
@@ -93,5 +97,5 @@ src/
   relay_poller.py     where the manually-relayed ATS numbers come from
   webhook_receiver.py FastAPI endpoint for ATS MTF Trend V1 alerts
   orchestrator.py     ties it together, dry-run only (no order placement)
-tests/                45 tests, one file per src module (except stop_placement)
+tests/                55 tests, one file per src module (except stop_placement)
 ```

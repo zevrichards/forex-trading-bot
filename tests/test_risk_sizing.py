@@ -1,5 +1,5 @@
 """
-Every row here is taken directly from Valentino's own lookup table:
+Every row here is taken directly from the trader's own lookup table:
 
     Stop    Approx. lot size
     5 pips  10.00 lots
@@ -40,7 +40,7 @@ ACCOUNT_BALANCE = 100_000.0
         (100, 0.50),
     ],
 )
-def test_matches_valentinos_table(stop_pips, expected_lots):
+def test_matches_traders_table(stop_pips, expected_lots):
     assert calculate_lot_size(ACCOUNT_BALANCE, stop_pips) == expected_lots
 
 

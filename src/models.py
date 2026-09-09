@@ -1,7 +1,7 @@
 """
 Shared data types for the EUR/USD bot.
 
-Every field here traces back to a specific line in Valentino's rules (see
+Every field here traces back to a specific line in the trader's rules (see
 README.md for the full mapping). Nothing in this file makes a trading
 decision — it's just the shape of the data the rest of the system passes
 around.
@@ -84,7 +84,7 @@ class Candle:
 
 @dataclass
 class Position:
-    """An open trade and everything needed to manage it per Valentino's rules."""
+    """An open trade and everything needed to manage it per the trader's rules."""
 
     direction: Direction
     entry_price: float

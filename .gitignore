@@ -22,6 +22,9 @@ env/
 *.pem
 relay_data.json
 
+# Google service account credentials (GoogleSheetRelaySource)
+forex-trading-bot-508116-b2c039d424d0.json
+
 # Editor / OS
 .vscode/
 .idea/
