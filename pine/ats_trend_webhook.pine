@@ -1,0 +1,68 @@
+//@version=6
+indicator(title="EUR/USD Bot — ATS Trend Webhook Bridge", overlay=true)
+
+// ---------------------------------------------------------------------
+// UNVERIFIED AGAINST THE LIVE INDICATOR.
+// See docs/pine-script-verification-checklist.md before trusting this for
+// anything beyond a first connectivity test.
+//
+// "ATS MTF Trend V1" is confirmed (via live cross-script source-input
+// testing, see CLAUDE.md's "Critical technical constraint") to expose
+// these five plots: Bullish Trend, Bearish Trend, Trend Start, Trend End,
+// Intent Level Start Dot. What is NOT yet confirmed is each plot's exact
+// value semantics on a real chart — whether "Bullish Trend" is a
+// boolean-style 1/0/na series, a price level, or something else. The
+// `close` defaults below are placeholders only, present so this script
+// compiles standalone before being attached to a real chart; every
+// input.source() must be manually repointed at the matching ATS MTF
+// Trend V1 plot from its dropdown once both scripts are on the same
+// chart, and the "isBullishTrend"-style booleans below re-checked against
+// what the source plot actually does.
+// ---------------------------------------------------------------------
+
+bullishTrendSrc = input.source(close, "ATS: Bullish Trend")
+bearishTrendSrc = input.source(close, "ATS: Bearish Trend")
+trendStartSrc   = input.source(close, "ATS: Trend Start")
+trendEndSrc     = input.source(close, "ATS: Trend End")
+intentDotSrc    = input.source(close, "ATS: Intent Level Start Dot")  // captured, not used by any alert yet — see note at bottom
+
+// ASSUMPTION, not confirmed: each source plot is non-na/non-zero exactly
+// on the bar its event/state applies, and na or 0 otherwise — the common
+// Pine convention for a boolean-style plot meant to drive
+// alertcondition()s. Confirm this against real chart behavior (checklist
+// step 4) before wiring a live TradingView alert to this.
+isBullishTrend = not na(bullishTrendSrc) and bullishTrendSrc != 0
+isBearishTrend = not na(bearishTrendSrc) and bearishTrendSrc != 0
+isTrendEnd     = not na(trendEndSrc) and trendEndSrc != 0
+
+// Fire only on the transition into the state, not every bar it holds —
+// matches webhook_receiver.py's "one event per state change" expectation,
+// and avoids spamming the endpoint every bar a trend simply continues.
+bullishTrendStarted = isBullishTrend and not isBullishTrend[1]
+bearishTrendStarted = isBearishTrend and not isBearishTrend[1]
+trendEnded           = isTrendEnd and not isTrendEnd[1]
+
+// Payload matches webhook_receiver.TradingViewAlert exactly:
+// {"symbol": ..., "signal": "bullish_trend" | "bearish_trend" | "trend_end"}
+// {{ticker}} is a TradingView alert placeholder, filled in per-chart at
+// alert-fire time — not something this script computes.
+alertcondition(bullishTrendStarted, title="Bullish Trend Started",
+     message='{"symbol": "{{ticker}}", "signal": "bullish_trend"}')
+alertcondition(bearishTrendStarted, title="Bearish Trend Started",
+     message='{"symbol": "{{ticker}}", "signal": "bearish_trend"}')
+alertcondition(trendEnded, title="Trend Ended",
+     message='{"symbol": "{{ticker}}", "signal": "trend_end"}')
+
+// Visual-only, for confirming this fires on the correct bars while wiring
+// it up on the real chart. Safe to hide/delete once verified.
+plotchar(bullishTrendStarted, title="Bullish start", char="▲", location=location.belowbar, color=color.green)
+plotchar(bearishTrendStarted, title="Bearish start", char="▼", location=location.abovebar, color=color.red)
+plotchar(trendEnded, title="Trend end", char="•", location=location.abovebar, color=color.gray)
+
+// intentDotSrc is exposed here because ATS MTF Trend V1 publishes it and
+// it may matter for entry logic later (per CLAUDE.md, the Order Block
+// Projection / Intent Level side of ATS is what actually triggers
+// entries) — but no MarketState field or webhook payload consumes it yet.
+// Do not wire an alert to it until decision_engine.py actually needs it;
+// this is just making sure the source is available on this script when
+// that day comes.

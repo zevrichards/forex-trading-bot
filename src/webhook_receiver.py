@@ -3,12 +3,15 @@ Receives TradingView alerts from a companion Pine Script built on top of
 "ATS MTF Trend V1" — the one ATS component confirmed to expose real plot
 data (Bullish/Bearish Trend, Trend Start/End, Intent Level Start Dot).
 
-NOT YET FUNCTIONAL END TO END: the companion Pine Script that reads ATS MTF
-Trend V1 via input.source() and defines alertcondition()s on it doesn't
-exist yet — that's the next piece of work once this v1 skeleton is
-reviewed. The payload schema below is a reasonable placeholder to build
-against now; it should be finalized to match whatever the actual Pine
-alert `message` template ends up being, not assumed to be exactly right.
+NOT YET VERIFIED END TO END: a companion Pine Script exists now
+(pine/ats_trend_webhook.pine) that reads ATS MTF Trend V1 via
+input.source() and defines alertcondition()s on it, with its message
+payload matching TradingViewAlert below exactly. But it has never been
+compiled or run against the real indicator — see
+docs/pine-script-verification-checklist.md for what's still unconfirmed
+(mainly: whether ATS's plots actually behave the boolean on/off way the
+script assumes). The payload schema below should be treated as
+provisional until that checklist is done, not assumed to be exactly right.
 
 Uses FastAPI because it's the least amount of code to get a working webhook
 endpoint with request validation for free — swap freely if there's a

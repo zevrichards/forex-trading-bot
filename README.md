@@ -6,7 +6,7 @@ an unresolved integration question, and clearly stubs the parts that do
 (the ATS relay's Google Sheet setup, and the TradingView webhook) so
 nothing about them is guessed at.
 
-## What's built and tested (55 passing tests)
+## What's built and tested (59 passing tests)
 
 | Rule (the trader's words) | Module | Tested against |
 |---|---|---|
@@ -47,12 +47,16 @@ currently holds placeholder/test values, not real ATS numbers yet.
 ## What's stubbed, and why
 
 **`webhook_receiver.py`** — receiving ATS MTF Trend V1's bias signal, which
-*is* confirmed live-readable. The endpoint works (tested), but the
-Pine Script companion indicator that reads ATS MTF Trend V1 via
-`input.source()` and defines the alert that posts here doesn't exist yet.
-The payload schema (`{"symbol": ..., "signal": "bullish_trend"}`) is a
-reasonable proposal, not a confirmed format — finalize it once the Pine
-script's actual alert message template exists.
+*is* confirmed live-readable. The endpoint works (tested). A companion Pine
+Script now exists too (`pine/ats_trend_webhook.pine`), reading ATS MTF
+Trend V1 via `input.source()` and firing `alertcondition()`s whose message
+payload matches this endpoint's schema exactly. What's not done: the
+script has never been compiled or run against the real indicator — see
+`docs/pine-script-verification-checklist.md` for what's unconfirmed
+(mainly whether ATS's plots behave the simple on/off way the script
+assumes). Treat the payload schema
+(`{"symbol": ..., "signal": "bullish_trend"}`) as provisional until that
+checklist is done.
 
 **Not started at all:**
 - Order execution (cTrader Open API integration) — nothing places a real
@@ -97,5 +101,7 @@ src/
   relay_poller.py     where the manually-relayed ATS numbers come from
   webhook_receiver.py FastAPI endpoint for ATS MTF Trend V1 alerts
   orchestrator.py     ties it together, dry-run only (no order placement)
-tests/                55 tests, one file per src module (except stop_placement)
+pine/
+  ats_trend_webhook.pine  companion Pine Script for webhook_receiver.py — drafted, unverified (see docs/pine-script-verification-checklist.md)
+tests/                59 tests, one file per src module (except stop_placement)
 ```
