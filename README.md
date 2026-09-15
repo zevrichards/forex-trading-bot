@@ -91,8 +91,10 @@ dropped), fixed year-round with no DST shift. `filters.py` updated.
    risk-sizing rule (0.5%/$500, already implemented in `risk_sizing.py`)
    instead of a buffer distance — the actual number is still unanswered.
    Re-ask grounded in a real trade example (a stop-placement screenshot
-   exists from 2026-09-14: entry ~1.15700, stop 1.15924, on a short —
-   that's the kind of concrete example to ask the pip distance against).
+   exists from 2026-09-14: a short with stop at 1.15924, entry price not
+   confirmed from the image — that's the kind of concrete example to ask
+   the pip distance against, but get the entry from the trader, don't
+   guess it from the chart).
 4. **News calendar source.** Needs an actual feed (a scraped calendar, a
    paid API) to populate the blackout list — nothing chosen yet.
 
