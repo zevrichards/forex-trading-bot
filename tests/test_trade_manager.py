@@ -90,6 +90,34 @@ def test_hold_when_nothing_triggers():
     assert [a.kind for a in actions] == ["HOLD"]
 
 
+def test_relayed_structure_stop_level_moves_stop_when_better():
+    position = make_long_position(partial_closed=True, stop_price=1.16100)
+    state = make_state(current_price=1.16500, structure_stop_level=1.16250)
+
+    actions = manage_position(position, state)
+
+    move_stop = next(a for a in actions if a.kind == "MOVE_STOP")
+    assert move_stop.new_stop_price == 1.16250
+
+
+def test_relayed_structure_stop_level_ignored_when_it_would_widen():
+    position = make_long_position(partial_closed=True, stop_price=1.16100)
+    state = make_state(current_price=1.16500, structure_stop_level=1.16050)
+
+    actions = manage_position(position, state)
+
+    assert [a.kind for a in actions] == ["HOLD"]
+
+
+def test_no_trailing_when_nothing_relayed():
+    position = make_long_position(partial_closed=True, stop_price=1.16100)
+    state = make_state(current_price=1.16500, structure_stop_level=None)
+
+    actions = manage_position(position, state)
+
+    assert [a.kind for a in actions] == ["HOLD"]
+
+
 def test_trail_stop_never_widens_on_long():
     # A "worse" proposed stop (lower) must be rejected in favor of the current one.
     assert trail_stop(current_stop=1.16200, proposed_stop=1.16100, direction=Direction.LONG) == 1.16200

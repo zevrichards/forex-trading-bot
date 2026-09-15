@@ -41,16 +41,23 @@ class MarketState:
     """A snapshot of everything the decision engine needs, at one point in time.
 
     box_high / box_low / buy_liquidity / sell_liquidity / ob_projection_level /
-    stop_buffer_pips are ATS Core / ATS V6 with OB Projections outputs, plus the
-    trader's per-trade stop buffer. As of v1 these arrive via manual relay (see
-    relay_poller.py) — the field names and meaning don't change if that later
-    gets replaced with a live feed. stop_buffer_pips is relayed rather than a
-    fixed constant because the trader's stop buffer is structural/contextual,
-    not one universal pip number (see docs/trader-strategy-source.md item 15).
+    stop_buffer_pips / weekly_bias / daily_bias / structure_stop_level are all
+    manually relayed (see relay_poller.py) — the trader reads all of them
+    visually off ATS/his charts, so none of them are computed from raw candle
+    data. stop_buffer_pips is relayed rather than a fixed constant because the
+    stop buffer is structural/contextual, not one universal pip number.
+    weekly_bias/daily_bias are relayed rather than computed because the
+    trader's own rules describe them as a visual read of ATS's trend line +
+    colored dots + structure, not a formula. structure_stop_level is the
+    current higher-low (longs) / lower-high (shorts) the trader would trail
+    the stop to, relayed the same way, since detecting that algorithmically
+    turned out to be the same "ask him to explain a concept he doesn't think
+    in those terms" problem as the others (see docs/trader-strategy-source.md
+    and the 2026-09-15 conversation log). bias.py's candle-based classify_trend()
+    predates this and is not wired into the live pipeline.
 
-    trend comes from "ATS MTF Trend V1", which IS live-readable (see webhook_receiver.py).
-    weekly_bias / daily_bias are computed independently from swing structure (see
-    bias.py) and don't depend on ATS at all.
+    trend comes from "ATS MTF Trend V1", which IS live-readable (see webhook_receiver.py)
+    — the one field here that isn't manually relayed.
     """
 
     symbol: str
@@ -67,6 +74,8 @@ class MarketState:
     weekly_bias: Bias
     daily_bias: Bias
     trend: Trend
+
+    structure_stop_level: float | None = None  # relayed; see trade_manager._trail_stop
 
     @property
     def value(self) -> float:

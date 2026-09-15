@@ -5,5 +5,8 @@
   "sell_liquidity": 1.16700,
   "ob_projection_level": 1.16100,
   "stop_buffer_pips": 3.0,
+  "weekly_bias": "bullish",
+  "daily_bias": "bullish",
+  "structure_stop_level": null,
   "relayed_at": "2026-09-09T10:00:00+00:00"
 }

@@ -55,11 +55,11 @@ def manage_position(position: Position, state: MarketState) -> list[ManagementAc
         return actions
 
     trailed_stop = _trail_stop(position, state)
-    if trailed_stop is not None:
+    if trailed_stop is not None and trailed_stop != position.stop_price:
         actions.append(
             ManagementAction(
                 "MOVE_STOP",
-                "New favorable structure formed — tightening stop (never widening).",
+                "New structure level relayed — tightening stop (never widening).",
                 new_stop_price=trailed_stop,
             )
         )
@@ -99,14 +99,19 @@ def trail_stop(current_stop: float, proposed_stop: float, direction: Direction) 
 
 
 def _trail_stop(position: Position, state: MarketState) -> float | None:
-    """PLACEHOLDER trailing logic.
+    """The trader's rule: "after price establishes a new higher-low ->
+    higher-high, move the stop below the newly established higher-low"
+    (mirrored for shorts). Detecting that algorithmically turned out to
+    need a "swing point" concept the trader doesn't think in — asked him
+    directly on 2026-09-15 and it didn't land (see
+    docs/trader-strategy-source.md, conversation log same date). Same fix
+    as stop_buffer_pips: he relays the current structure-stop level
+    directly (state.structure_stop_level) instead of the bot detecting it.
 
-    The trader's actual rule ("after price establishes a new higher-low ->
-    higher-high, move the stop below the newly established higher-low") requires
-    swing-point detection this module deliberately does not implement yet — see
-    README "Open questions: swing-point detection for trailing." Wiring this up
-    for real is the next unit of work after v1's entry/partial/breakeven/exit
-    logic is validated. Returns None (no-op) until then, but every call still
-    goes through trail_stop() above so the never-widen invariant is never at risk.
+    Returns None if nothing's been relayed (no new structure to trail to
+    yet). Every non-None result still goes through trail_stop() so a stale
+    or backwards relayed value can never widen the stop.
     """
-    return None
+    if state.structure_stop_level is None:
+        return None
+    return trail_stop(position.stop_price, state.structure_stop_level, position.direction)

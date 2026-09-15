@@ -18,7 +18,7 @@ import os
 from datetime import datetime, timezone
 
 from . import decision_engine, filters, trade_manager
-from .models import Bias, MarketState, Trend
+from .models import MarketState, Trend
 from .relay_poller import GoogleSheetRelaySource, JSONFileRelaySource, RelaySource
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -42,16 +42,17 @@ HIGH_IMPACT_NEWS_EVENTS: list[datetime] = []  # TODO: wire up a real economic ca
 def build_market_state(
     relay_source: RelaySource,
     current_price: float,
-    weekly_bias: Bias,
-    daily_bias: Bias,
     trend: Trend,
     symbol: str = "EURUSD",
 ) -> MarketState:
-    """Combines the three independent data sources into one MarketState:
-    relayed ATS numbers, live current price, and bias/trend (computed via
-    bias.py from candle history, or read from the webhook receiver's
-    /trend/latest for `trend` once that's wired in — passed in explicitly
-    here for now so this function stays easy to unit test).
+    """Combines two independent data sources into one MarketState: relayed
+    values (box/liquidity/OB projection/stop buffer/weekly+daily bias/
+    structure stop level — all read visually off the trader's charts, see
+    relay_poller.py) and live current price. `trend` is the one field NOT
+    in the relay — it's meant to come from ATS MTF Trend V1 via the webhook
+    receiver's /trend/latest once that Pine Script is verified (see
+    docs/pine-script-verification-checklist.md); passed in explicitly here
+    until then, and to keep this function easy to unit test.
     """
     relay = relay_source.get_latest()
     return MarketState(
@@ -64,9 +65,10 @@ def build_market_state(
         sell_liquidity=relay.sell_liquidity,
         ob_projection_level=relay.ob_projection_level,
         stop_buffer_pips=relay.stop_buffer_pips,
-        weekly_bias=weekly_bias,
-        daily_bias=daily_bias,
+        weekly_bias=relay.weekly_bias,
+        daily_bias=relay.daily_bias,
         trend=trend,
+        structure_stop_level=relay.structure_stop_level,
     )
 
 
@@ -84,8 +86,8 @@ def evaluate_once(state: MarketState) -> None:
 
 if __name__ == "__main__":
     # Manual smoke-test entry point. Reads from the real Google Sheet relay
-    # (see docs/relay-setup.md) and hard-codes bias/trend/price for now,
-    # since the candle-history fetch and webhook receiver aren't wired into
+    # (see docs/relay-setup.md) — weekly/daily bias now come from there too.
+    # trend still hard-coded, since the webhook receiver isn't wired into
     # this loop yet. Set RELAY_SOURCE=json to fall back to relay_data.json
     # (relay_poller.JSONFileRelaySource) for offline/local testing instead.
     if os.environ.get("RELAY_SOURCE") == "json":
@@ -99,8 +101,6 @@ if __name__ == "__main__":
     demo_state = build_market_state(
         relay_source=relay_source,
         current_price=1.15700,
-        weekly_bias=Bias.BULLISH,
-        daily_bias=Bias.BULLISH,
         trend=Trend.BULLISH,
     )
     evaluate_once(demo_state)
