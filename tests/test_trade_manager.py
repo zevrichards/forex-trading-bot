@@ -31,6 +31,7 @@ def make_state(**overrides) -> MarketState:
         buy_liquidity=1.16300,
         sell_liquidity=1.16700,
         ob_projection_level=1.16100,
+        stop_buffer_pips=3.0,
         weekly_bias=Bias.BULLISH,
         daily_bias=Bias.BULLISH,
         trend=Trend.BULLISH,

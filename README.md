@@ -14,7 +14,7 @@ nothing about them is guessed at.
 | "BUY when price touches buy-side liquidity while below Value... SELL... above Value" | `decision_engine.py` | Clean buy/sell cases, wait cases, and a regression test that the two conditions are ANDed, not ORed |
 | "Weekly + Daily bias must agree... Trend must agree with the bias" | `decision_engine.py` | Conflicting/neutral bias, trend disagreement |
 | "Bullish trend = HH + HL. Bearish trend = LL + LH." | `bias.py` | Hand-built, hand-verified candle sequences for bullish, bearish, insufficient structure, and a genuinely conflicting (ambiguous) case |
-| "Stop is outside the ATS Order Block Projection, with a small manually determined buffer" | `stop_placement.py` | Not yet unit tested — buffer size is a placeholder, see Open Questions |
+| "Stop is outside the ATS Order Block Projection, with a small manually determined buffer" | `stop_placement.py` | LONG/SHORT stop calc, zero-buffer edge case — buffer is now a relayed value, not a placeholder constant |
 | "Close 50% when opposite-side liquidity is touched, move remaining stop to breakeven" | `trade_manager.py` | Triggers correctly, doesn't fire early |
 | "Exit the remaining 50% when price enters/touches a new ATS-identified Box" | `trade_manager.py` | Triggers only after partial close + a genuinely new box |
 | "Never widen the stop" | `trade_manager.py` (`trail_stop`) | Enforced as a hard invariant on both long and short, independent of what proposes the new stop |
@@ -74,6 +74,15 @@ checklist is done.
 ~~**Session hours.**~~ Resolved 2026-09-14: London session only (New York
 dropped), fixed year-round with no DST shift. `filters.py` updated.
 
+~~**Stop buffer size.**~~ Resolved 2026-09-15: rather than a fixed pip
+constant, the trader's own source material (`docs/trader-strategy-source.md`
+item 15: "not simply an arbitrary 10 or 20 pips... sits slightly below it
+depending on structure") describes the buffer as structural/contextual, not
+universal. So it's now a 6th manually-relayed value (`stop_buffer_pips`) —
+see `relay_poller.py`, `models.MarketState`, `docs/relay-setup.md`. The
+`DEFAULT_BUFFER_PIPS` constant is gone; `stop_placement.calculate_stop_price`
+now requires `buffer_pips` explicitly.
+
 1. **Swing-point detection for the real trailing-stop rule.** `bias.py`
    uses a standard fractal method (candle is a swing point if it's the
    most extreme of its 2 neighbors on each side) for weekly/daily trend
@@ -81,21 +90,15 @@ dropped), fixed year-round with no DST shift. `filters.py` updated.
    trader specified numerically. Asked the trader directly on 2026-09-14
    using "swing point" terminology — they didn't recognize the term
    ("Swing point? You mean liquidity?"), meaning this isn't a concept
-   they use separately from liquidity/structure. Needs re-asking without
-   that jargon, grounded in a concrete chart example, before
-   `trade_manager._trail_stop()` gets built for real on top of it — see
-   `docs/wyckoff-forex-bot-plan.md`'s jargon-catcher approach.
-2. **Stop buffer size.** `stop_placement.py`'s `DEFAULT_BUFFER_PIPS = 2.0`
-   is a placeholder for what the trader called a "small manually determined
-   buffer." Asked on 2026-09-14; the trader's reply described the
-   risk-sizing rule (0.5%/$500, already implemented in `risk_sizing.py`)
-   instead of a buffer distance — the actual number is still unanswered.
-   Re-ask grounded in a real trade example (a stop-placement screenshot
-   exists from 2026-09-14: a short with stop at 1.15924, entry price not
-   confirmed from the image — that's the kind of concrete example to ask
-   the pip distance against, but get the entry from the trader, don't
-   guess it from the chart).
-4. **News calendar source.** Needs an actual feed (a scraped calendar, a
+   they use separately from liquidity/structure. `docs/trader-strategy-source.md`
+   backs this up — every HH/HL/structure reference in his own write-up is
+   tied to liquidity mechanics (sweeps, rejections, box breaks), never to
+   raw candle geometry. He's since sent chart screenshots marking specific
+   "order block" candles and measured leg distances between them (not
+   simple circled highs/lows) — needs review against `bias.py`'s fractal
+   method before `trade_manager._trail_stop()` gets built for real on top
+   of it.
+2. **News calendar source.** Needs an actual feed (a scraped calendar, a
    paid API) to populate the blackout list — nothing chosen yet.
 
 ## Project layout

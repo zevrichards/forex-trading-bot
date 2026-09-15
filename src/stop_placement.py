@@ -5,27 +5,29 @@ Initial stop placement.
     determined buffer."
 
 ob_projection_level is a relayed ATS value (see models.MarketState). The
-buffer is a config value, not a chart-read one — the trader called it
-"manually determined," so it's exposed here as a parameter rather than
-hard-coded, and should be confirmed with them directly (see README "Open
-questions").
+buffer is NOT a fixed constant — the trader's own source material describes
+it as structural/contextual ("not simply an arbitrary 10 or 20 pips... sits
+slightly below it depending on structure", docs/trader-strategy-source.md
+item 15), so buffer_pips is a required, per-trade relayed value (see
+models.MarketState.stop_buffer_pips / relay_poller.RelayValues), not a
+module-level default.
 """
 
 from __future__ import annotations
 
 from .models import Direction
 
-DEFAULT_BUFFER_PIPS = 2.0  # PLACEHOLDER — confirm the real number with the trader
 PIP_SIZE = 0.0001  # EUR/USD; JPY pairs would use 0.01, not used here but noted for reuse
 
 
 def calculate_stop_price(
     ob_projection_level: float,
     direction: Direction,
-    buffer_pips: float = DEFAULT_BUFFER_PIPS,
+    buffer_pips: float,
 ) -> float:
     """Long: stop goes below the OB projection level, minus the buffer.
     Short: stop goes above the OB projection level, plus the buffer.
+    buffer_pips is required — see module docstring for why there's no default.
     """
     buffer_price = buffer_pips * PIP_SIZE
     if direction == Direction.LONG:

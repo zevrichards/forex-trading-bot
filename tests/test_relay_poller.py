@@ -25,8 +25,9 @@ HEADER = [
     "Buy-side Liquidity",
     "Sell-side Liquidity",
     "OB Projection Level",
+    "Stop Buffer (pips)",
 ]
-VALID_ROW = ["9/9/2026 10:00:00", "1.16600", "1.16400", "1.16300", "1.16700", "1.16100"]
+VALID_ROW = ["9/9/2026 10:00:00", "1.16600", "1.16400", "1.16300", "1.16700", "1.16100", "3.0"]
 
 
 def test_json_file_relay_source_reads_expected_fields(tmp_path):
@@ -34,11 +35,13 @@ def test_json_file_relay_source_reads_expected_fields(tmp_path):
     path.write_text(
         '{"box_high": 1.166, "box_low": 1.164, "buy_liquidity": 1.163, '
         '"sell_liquidity": 1.167, "ob_projection_level": 1.161, '
+        '"stop_buffer_pips": 3.0, '
         '"relayed_at": "2026-09-09T10:00:00+00:00"}'
     )
     values = JSONFileRelaySource(path).get_latest()
     assert values.box_high == 1.166
     assert values.ob_projection_level == 1.161
+    assert values.stop_buffer_pips == 3.0
     assert values.relayed_at == datetime.fromisoformat("2026-09-09T10:00:00+00:00")
 
 
@@ -65,7 +68,7 @@ def test_parse_sheet_timestamp_unrecognized_raises():
 
 
 def test_parse_rows_reads_last_row():
-    older_row = ["9/8/2026 09:00:00", "1.1", "1.0", "1.05", "1.15", "0.95"]
+    older_row = ["9/8/2026 09:00:00", "1.1", "1.0", "1.05", "1.15", "0.95", "2.0"]
     rows = [HEADER, older_row, VALID_ROW]
 
     values = GoogleSheetRelaySource._parse_rows(rows, source="sheet123")
@@ -76,6 +79,7 @@ def test_parse_rows_reads_last_row():
         buy_liquidity=1.163,
         sell_liquidity=1.167,
         ob_projection_level=1.161,
+        stop_buffer_pips=3.0,
         relayed_at=datetime(2026, 9, 9, 10, 0, 0),
     )
 
@@ -97,13 +101,13 @@ def test_parse_rows_too_few_columns_raises():
 
 
 def test_parse_rows_non_numeric_value_raises():
-    bad_row = ["9/9/2026 10:00:00", "not-a-number", "1.164", "1.163", "1.167", "1.161"]
+    bad_row = ["9/9/2026 10:00:00", "not-a-number", "1.164", "1.163", "1.167", "1.161", "3.0"]
     with pytest.raises(ValueError, match="non-numeric"):
         GoogleSheetRelaySource._parse_rows([HEADER, bad_row], source="sheet123")
 
 
 def test_parse_rows_bad_timestamp_raises_with_clear_message():
-    bad_row = ["not a date", "1.166", "1.164", "1.163", "1.167", "1.161"]
+    bad_row = ["not a date", "1.166", "1.164", "1.163", "1.167", "1.161", "3.0"]
     with pytest.raises(ValueError, match="unparseable Timestamp"):
         GoogleSheetRelaySource._parse_rows([HEADER, bad_row], source="sheet123")
 

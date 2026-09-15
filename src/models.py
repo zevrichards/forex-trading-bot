@@ -40,10 +40,13 @@ class Direction(str, Enum):
 class MarketState:
     """A snapshot of everything the decision engine needs, at one point in time.
 
-    box_high / box_low / buy_liquidity / sell_liquidity / ob_projection_level are
-    ATS Core / ATS V6 with OB Projections outputs. As of v1 these arrive via manual
-    relay (see relay_poller.py) — the field names and meaning don't change if that
-    later gets replaced with a live feed.
+    box_high / box_low / buy_liquidity / sell_liquidity / ob_projection_level /
+    stop_buffer_pips are ATS Core / ATS V6 with OB Projections outputs, plus the
+    trader's per-trade stop buffer. As of v1 these arrive via manual relay (see
+    relay_poller.py) — the field names and meaning don't change if that later
+    gets replaced with a live feed. stop_buffer_pips is relayed rather than a
+    fixed constant because the trader's stop buffer is structural/contextual,
+    not one universal pip number (see docs/trader-strategy-source.md item 15).
 
     trend comes from "ATS MTF Trend V1", which IS live-readable (see webhook_receiver.py).
     weekly_bias / daily_bias are computed independently from swing structure (see
@@ -59,6 +62,7 @@ class MarketState:
     buy_liquidity: float   # blue dotted line
     sell_liquidity: float  # yellow dotted line
     ob_projection_level: float  # for stop placement
+    stop_buffer_pips: float  # relayed per-trade, not a fixed constant — see stop_placement.py
 
     weekly_bias: Bias
     daily_bias: Bias

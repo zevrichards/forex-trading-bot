@@ -37,6 +37,7 @@ class RelayValues:
     buy_liquidity: float
     sell_liquidity: float
     ob_projection_level: float
+    stop_buffer_pips: float
     relayed_at: datetime
 
 
@@ -49,10 +50,10 @@ class RelaySource(ABC):
 
 class JSONFileRelaySource(RelaySource):
     """Reads {"box_high": ..., "box_low": ..., "buy_liquidity": ...,
-    "sell_liquidity": ..., "ob_projection_level": ..., "relayed_at": "<ISO8601>"}
-    from a local file. Useful for local dev, testing, and as a manual
-    stand-in before the real form/sheet exists — the trader (or you, for now)
-    can literally hand-edit this file.
+    "sell_liquidity": ..., "ob_projection_level": ..., "stop_buffer_pips": ...,
+    "relayed_at": "<ISO8601>"} from a local file. Useful for local dev,
+    testing, and as a manual stand-in before the real form/sheet exists —
+    the trader (or you, for now) can literally hand-edit this file.
     """
 
     def __init__(self, path: str | Path):
@@ -70,6 +71,7 @@ class JSONFileRelaySource(RelaySource):
             buy_liquidity=data["buy_liquidity"],
             sell_liquidity=data["sell_liquidity"],
             ob_projection_level=data["ob_projection_level"],
+            stop_buffer_pips=data["stop_buffer_pips"],
             relayed_at=datetime.fromisoformat(data["relayed_at"]),
         )
 
@@ -80,7 +82,12 @@ class GoogleSheetRelaySource(RelaySource):
     Expects a plain sheet with a header row and one data row per relayed
     update, columns in this exact order:
 
-        Timestamp | Box High | Box Low | Buy-side Liquidity | Sell-side Liquidity | OB Projection Level
+        Timestamp | Box High | Box Low | Buy-side Liquidity | Sell-side Liquidity | OB Projection Level | Stop Buffer (pips)
+
+    Stop Buffer (pips) is relayed per-update rather than a fixed constant —
+    the trader's stop buffer is structural/contextual, not one fixed pip
+    number (see docs/trader-strategy-source.md item 15), so it's supplied
+    alongside the other ATS numbers instead of defaulting in code.
 
     Column A (Timestamp) is typed in by whoever adds the row — see
     docs/relay-setup.md for the exact format. Building the Sheet and the
@@ -134,12 +141,12 @@ class GoogleSheetRelaySource(RelaySource):
                 "empty) — nothing has been entered yet."
             )
         last_row = rows[-1]
-        if len(last_row) < 6:
+        if len(last_row) < 7:
             raise ValueError(
                 f"Sheet {source}'s last row has {len(last_row)} columns, expected "
-                f"6 (Timestamp + 5 values): {last_row!r}"
+                f"7 (Timestamp + 6 values): {last_row!r}"
             )
-        timestamp_str, box_high, box_low, buy_liq, sell_liq, ob_proj = last_row[:6]
+        timestamp_str, box_high, box_low, buy_liq, sell_liq, ob_proj, buffer_pips = last_row[:7]
         try:
             relayed_at = _parse_sheet_timestamp(timestamp_str)
         except ValueError as exc:
@@ -153,6 +160,7 @@ class GoogleSheetRelaySource(RelaySource):
                 buy_liquidity=float(buy_liq),
                 sell_liquidity=float(sell_liq),
                 ob_projection_level=float(ob_proj),
+                stop_buffer_pips=float(buffer_pips),
                 relayed_at=relayed_at,
             )
         except ValueError as exc:

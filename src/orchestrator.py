@@ -63,6 +63,7 @@ def build_market_state(
         buy_liquidity=relay.buy_liquidity,
         sell_liquidity=relay.sell_liquidity,
         ob_projection_level=relay.ob_projection_level,
+        stop_buffer_pips=relay.stop_buffer_pips,
         weekly_bias=weekly_bias,
         daily_bias=daily_bias,
         trend=trend,
