@@ -18,7 +18,7 @@ nothing about them is guessed at.
 | "Close 50% when opposite-side liquidity is touched, move remaining stop to breakeven" | `trade_manager.py` | Triggers correctly, doesn't fire early |
 | "Exit the remaining 50% when price enters/touches a new ATS-identified Box" | `trade_manager.py` | Triggers only after partial close + a genuinely new box |
 | "Never widen the stop" | `trade_manager.py` (`trail_stop`) | Enforced as a hard invariant on both long and short, independent of what proposes the new stop |
-| "Trading days: Monday-Friday. Sessions: London and New York." | `filters.py` | Weekday/weekend, in/out of session |
+| "Trading days: Monday-Friday. Session: London only, fixed, no DST." | `filters.py` | Weekday/weekend, in/out of session |
 | "News blackout: 15 min before, 30 min after" | `filters.py` | Before/after/outside the window |
 
 Run the tests yourself: `pip install -r requirements.txt && pytest -v`
@@ -71,19 +71,28 @@ checklist is done.
 
 ## Open questions to resolve before this goes further
 
+~~**Session hours.**~~ Resolved 2026-09-14: London session only (New York
+dropped), fixed year-round with no DST shift. `filters.py` updated.
+
 1. **Swing-point detection for the real trailing-stop rule.** `bias.py`
    uses a standard fractal method (candle is a swing point if it's the
    most extreme of its 2 neighbors on each side) for weekly/daily trend
-   classification, which is a Claude judgment call, not something
-   the trader specified numerically. Worth confirming with them that this
-   matches what they'd call a swing point by eye, especially before
-   `trade_manager._trail_stop()` gets built for real on top of it.
-2. **Session hours.** `filters.py`'s London (07:00-16:00 UTC) and New York
-   (12:00-21:00 UTC) windows are standard placeholders, not confirmed with
-   the trader, and don't account for daylight saving shifts on either side.
-3. **Stop buffer size.** `stop_placement.py`'s `DEFAULT_BUFFER_PIPS = 2.0`
+   classification, which is a Claude judgment call, not something the
+   trader specified numerically. Asked the trader directly on 2026-09-14
+   using "swing point" terminology — they didn't recognize the term
+   ("Swing point? You mean liquidity?"), meaning this isn't a concept
+   they use separately from liquidity/structure. Needs re-asking without
+   that jargon, grounded in a concrete chart example, before
+   `trade_manager._trail_stop()` gets built for real on top of it — see
+   `docs/wyckoff-forex-bot-plan.md`'s jargon-catcher approach.
+2. **Stop buffer size.** `stop_placement.py`'s `DEFAULT_BUFFER_PIPS = 2.0`
    is a placeholder for what the trader called a "small manually determined
-   buffer" — get an actual number (or a rule for choosing one) from them.
+   buffer." Asked on 2026-09-14; the trader's reply described the
+   risk-sizing rule (0.5%/$500, already implemented in `risk_sizing.py`)
+   instead of a buffer distance — the actual number is still unanswered.
+   Re-ask grounded in a real trade example (a stop-placement screenshot
+   exists from 2026-09-14: entry ~1.15700, stop 1.15924, on a short —
+   that's the kind of concrete example to ask the pip distance against).
 4. **News calendar source.** Needs an actual feed (a scraped calendar, a
    paid API) to populate the blackout list — nothing chosen yet.
 

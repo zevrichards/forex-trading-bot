@@ -23,12 +23,13 @@ def test_inside_london_session():
     assert is_in_session(dt)
 
 
-def test_inside_new_york_session():
+def test_former_new_york_session_hours_now_excluded():
+    """New York session was dropped 2026-09-14 — London-only now."""
     dt = datetime(2026, 9, 9, 18, 0, tzinfo=timezone.utc)
-    assert is_in_session(dt)
+    assert not is_in_session(dt)
 
 
-def test_outside_both_sessions():
+def test_outside_london_session():
     dt = datetime(2026, 9, 9, 2, 0, tzinfo=timezone.utc)  # 2am UTC, dead zone
     assert not is_in_session(dt)
 
