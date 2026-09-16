@@ -17,9 +17,10 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from . import decision_engine, filters, trade_manager
-from .models import MarketState, Trend
+from . import decision_engine, filters, risk_sizing, stop_placement, trade_manager
+from .models import Direction, MarketState, Trend
 from .news_calendar import ForexFactoryCalendarSource, NewsCalendarSource
+from .order_execution import LoggingOrderExecutor, OrderExecutor, build_order_request
 from .relay_poller import GoogleSheetRelaySource, JSONFileRelaySource, RelaySource
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -36,6 +37,12 @@ GOOGLE_SHEET_ID = os.environ.get(
 GOOGLE_SHEET_CREDENTIALS_PATH = os.environ.get(
     "RELAY_SHEET_CREDENTIALS_PATH", "forex-trading-bot-508116-b2c039d424d0.json"
 )
+
+# PLACEHOLDER — the trader's own worked examples all use $100,000
+# (risk_sizing.py's tests match his table exactly), but this isn't read
+# from a real account anywhere. Once order execution is real, this needs
+# to come from the actual broker account balance, not this constant.
+ACCOUNT_BALANCE = float(os.environ.get("ACCOUNT_BALANCE", "100000"))
 
 
 def build_market_state(
@@ -71,7 +78,17 @@ def build_market_state(
     )
 
 
-def evaluate_once(state: MarketState, high_impact_events: list[datetime]) -> None:
+def evaluate_once(
+    state: MarketState,
+    high_impact_events: list[datetime],
+    order_executor: OrderExecutor,
+    account_balance: float = ACCOUNT_BALANCE,
+) -> None:
+    """Runs the full pipeline: filters -> entry decision -> (if BUY/SELL)
+    stop placement -> position sizing -> risk-budget guard -> order.
+    order_executor defaults matter here: pass LoggingOrderExecutor (the
+    default everywhere this is actually called) to keep this a dry run —
+    nothing places a real order yet, see CLAUDE.md."""
     can_trade, reason = filters.can_trade_now(state.timestamp, high_impact_events)
     if not can_trade:
         logger.info("No-trade window: %s", reason)
@@ -79,8 +96,40 @@ def evaluate_once(state: MarketState, high_impact_events: list[datetime]) -> Non
 
     decision = decision_engine.evaluate_entry(state)
     logger.info("Decision: %s — %s", decision.action, decision.reason)
-    # Sizing/order placement happen from here once decision.action is BUY/SELL
-    # and a broker integration exists (see README "Not yet built").
+
+    if decision.action not in (decision_engine.BUY, decision_engine.SELL):
+        return
+
+    direction = Direction.LONG if decision.action == decision_engine.BUY else Direction.SHORT
+    stop_price = stop_placement.calculate_stop_price(
+        state.ob_projection_level, direction, state.stop_buffer_pips
+    )
+    stop_distance = stop_placement.stop_distance_pips(state.current_price, stop_price)
+    lot_size = risk_sizing.calculate_lot_size(account_balance, stop_distance)
+
+    if risk_sizing.exceeds_risk_budget(account_balance, stop_distance, lot_size):
+        logger.warning(
+            "Calculated lot size %.2f on a %.1f-pip stop exceeds the risk "
+            "budget — NOT placing an order.",
+            lot_size,
+            stop_distance,
+        )
+        return
+
+    order_request = build_order_request(
+        direction=direction,
+        symbol=state.symbol,
+        size_lots=lot_size,
+        stop_price=stop_price,
+    )
+    result = order_executor.place_market_order(order_request)
+    logger.info(
+        "Order (%.2f lots, stop %.5f): %s — %s",
+        lot_size,
+        stop_price,
+        result.status,
+        result.message,
+    )
 
 
 def fetch_high_impact_event_times(source: NewsCalendarSource) -> list[datetime]:
@@ -120,4 +169,4 @@ if __name__ == "__main__":
         trend=Trend.BULLISH,
     )
     high_impact_events = fetch_high_impact_event_times(ForexFactoryCalendarSource())
-    evaluate_once(demo_state, high_impact_events)
+    evaluate_once(demo_state, high_impact_events, order_executor=LoggingOrderExecutor())

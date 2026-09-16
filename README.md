@@ -6,7 +6,7 @@ an unresolved integration question, and clearly stubs the parts that do
 (the TradingView webhook, and the Google Sheet's newest columns) so
 nothing about them is guessed at.
 
-## What's built and tested (90 passing tests)
+## What's built and tested (107 passing tests)
 
 | Rule (the trader's words) | Module | Tested against |
 |---|---|---|
@@ -20,6 +20,8 @@ nothing about them is guessed at.
 | "Never widen the stop" | `trade_manager.py` (`trail_stop`) | Enforced as a hard invariant on both long and short, independent of what proposes the new stop |
 | "Trading days: Monday-Friday. Session: London only, fixed, no DST." | `filters.py` | Weekday/weekend, in/out of session |
 | "News blackout: 15 min before, 30 min after" | `filters.py` | Before/after/outside the window |
+| *(no direct quote — this is plumbing, not a rule)* | `orchestrator.py` | Full pipeline wiring: BUY/SELL -> stop -> lot size -> order, and that WAIT/NO_TRADE/filtered-out cases never reach the order executor |
+| *(no direct quote — cTrader Open API's own message format)* | `order_execution.py` | Request-building tested against the real installed `ctrader-open-api` package, not a mock — see note below |
 
 Run the tests yourself: `pip install -r requirements.txt && pytest -v`
 
@@ -31,6 +33,22 @@ trader thinks (see Open Questions history below); `trend` now comes from
 either the ATS MTF Trend V1 webhook (once verified) or manual override, and
 `weekly_bias`/`daily_bias` are relayed values. `bias.py` is safe to leave
 alone or remove later — it isn't blocking anything.
+
+**`order_execution.py` note (2026-09-15):** `_build_new_order_proto()` —
+the code that turns a BUY/SELL decision into a cTrader order request — is
+real, and tested against the actual installed `ctrader-open-api` PyPI
+package's protobuf message shapes (field names, `MARKET`/`BUY`/`SELL`
+enum values, volume units, stopLoss/takeProfit semantics), confirmed
+2026-09-15 by installing the package and introspecting it directly plus
+cross-checking help.ctrader.com — not guessed from memory. What's
+genuinely not done: `place_market_order()` itself, i.e. actually sending
+anything over the wire. That needs a live cTrader demo account (client
+ID/secret from an app registered at openapi.ctrader.com, an OAuth access
+token, and a broker-specific symbolId for EURUSD) which doesn't exist —
+raises `NotImplementedError` rather than guessing at connection-lifecycle
+code that can't be tested. `orchestrator.py` defaults to
+`LoggingOrderExecutor` (dry-run), consistent with "nothing places a real
+order yet."
 
 One real bug got caught during this build, worth knowing about: the
 trader's own worked example (30 pips -> 1.67 lots) technically risks $501,
@@ -95,8 +113,9 @@ assumes). Treat the payload schema
 checklist is done.
 
 **Not started at all:**
-- Order execution (cTrader Open API integration) — nothing places a real
-  order yet; `orchestrator.py` only logs what it *would* do.
+- The actual network side of order execution — see `order_execution.py`
+  note above. `orchestrator.py` defaults to `LoggingOrderExecutor`, so
+  nothing places a real order yet.
 - Candle history fetch for `bias.py` to run on live data — moot now, see
   the `bias.py` note above; this was only needed if `bias.py` ever got
   wired into the live pipeline, which it doesn't.
@@ -154,8 +173,9 @@ src/
   relay_poller.py     where the manually-relayed ATS numbers come from
   news_calendar.py    populates the news blackout list (ForexFactory feed)
   webhook_receiver.py FastAPI endpoint for ATS MTF Trend V1 alerts
-  orchestrator.py     ties it together, dry-run only (no order placement)
+  order_execution.py  builds real cTrader order requests; sending them is NOT done (see note above)
+  orchestrator.py     full pipeline: filters -> decision -> stop -> size -> order (dry-run by default)
 pine/
   ats_trend_webhook.pine  companion Pine Script for webhook_receiver.py — drafted, unverified (see docs/pine-script-verification-checklist.md)
-tests/                90 tests, one file per src module, plus test_trade_manager_lifecycle.py
+tests/                107 tests, one file per src module, plus test_trade_manager_lifecycle.py and test_orchestrator.py
 ```

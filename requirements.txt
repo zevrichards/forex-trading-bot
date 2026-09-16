@@ -4,5 +4,7 @@ uvicorn>=0.29
 pydantic>=2.6
 gspread>=6.0
 google-auth>=2.29
-# Not yet used by any code, but on the list for when the real broker
-# integration gets built.
+ctrader-open-api>=0.9.2
+# ctrader-open-api's request-building is used/tested (order_execution.py);
+# the actual network connection isn't wired up yet — see that module's
+# docstring for why.
