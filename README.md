@@ -6,7 +6,7 @@ an unresolved integration question, and clearly stubs the parts that do
 (the TradingView webhook, and the Google Sheet's newest columns) so
 nothing about them is guessed at.
 
-## What's built and tested (77 passing tests)
+## What's built and tested (81 passing tests)
 
 | Rule (the trader's words) | Module | Tested against |
 |---|---|---|
@@ -40,6 +40,16 @@ would have rejected their own example. Fixed by tolerating half a
 lot-step's worth of unavoidable rounding — see the comment in
 `risk_sizing.py` for the full reasoning. This is exactly the kind of thing
 testing against their real numbers was for.
+
+A second real bug (2026-09-15): `manage_position()` returned `[]` before
+the first partial close but `[HOLD]` after it, for the same "nothing to do
+right now" situation — an inconsistent API that only showed up once
+`tests/test_trade_manager_lifecycle.py` started running a full position
+lifecycle through multiple `manage_position()` calls in sequence instead of
+testing each call in isolation. Fixed by restructuring the function to one
+exit path with a single "fall back to HOLD" check. Single-call tests
+couldn't have caught this by construction — worth keeping the lifecycle
+test file around as its own category, not folding it into `test_trade_manager.py`.
 
 ## What's live
 

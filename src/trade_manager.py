@@ -23,6 +23,9 @@ PARTIAL_CLOSE_FRACTION = 0.5  # "close 50% of the position"
 
 
 def manage_position(position: Position, state: MarketState) -> list[ManagementAction]:
+    """Always returns at least one action — HOLD when nothing else applies —
+    so callers never have to special-case an empty list vs. [HOLD] depending
+    on which stage of the lifecycle the position is in."""
     actions: list[ManagementAction] = []
 
     if not position.partial_closed:
@@ -41,10 +44,7 @@ def manage_position(position: Position, state: MarketState) -> list[ManagementAc
                     new_stop_price=position.entry_price,
                 )
             )
-        return actions  # nothing else happens before the partial close
-
-    # From here on, position.partial_closed is True.
-    if _new_box_touched(position, state):
+    elif _new_box_touched(position, state):
         actions.append(
             ManagementAction(
                 "FULL_CLOSE",
@@ -52,17 +52,16 @@ def manage_position(position: Position, state: MarketState) -> list[ManagementAc
                 "exiting the remaining 50% per rule.",
             )
         )
-        return actions
-
-    trailed_stop = _trail_stop(position, state)
-    if trailed_stop is not None and trailed_stop != position.stop_price:
-        actions.append(
-            ManagementAction(
-                "MOVE_STOP",
-                "New structure level relayed — tightening stop (never widening).",
-                new_stop_price=trailed_stop,
+    else:
+        trailed_stop = _trail_stop(position, state)
+        if trailed_stop is not None and trailed_stop != position.stop_price:
+            actions.append(
+                ManagementAction(
+                    "MOVE_STOP",
+                    "New structure level relayed — tightening stop (never widening).",
+                    new_stop_price=trailed_stop,
+                )
             )
-        )
 
     if not actions:
         actions.append(ManagementAction("HOLD", "No management action triggered."))
