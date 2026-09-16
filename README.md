@@ -6,7 +6,7 @@ an unresolved integration question, and clearly stubs the parts that do
 (the TradingView webhook, and the Google Sheet's newest columns) so
 nothing about them is guessed at.
 
-## What's built and tested (81 passing tests)
+## What's built and tested (90 passing tests)
 
 | Rule (the trader's words) | Module | Tested against |
 |---|---|---|
@@ -60,14 +60,25 @@ four joined the relay instead of being computed. Confirmed via live testing
 that the ATS numbers can't be read programmatically (see the WhatsApp
 conversation history / plan docs for the screen-share findings).
 `GoogleSheetRelaySource` reads the last row of a manually-maintained Google
-Sheet (no Form, values are typed in directly) via `gspread`, and has been
-run successfully end-to-end against the real Sheet with the original 7
-columns — see `docs/relay-setup.md` for the setup and the current full
-10-column schema. **The live Sheet needs the 3 newest columns (Weekly Bias,
-Daily Bias, Structure Stop Level) added before the orchestrator will run
-again** — it currently only has through Stop Buffer. `JSONFileRelaySource`
-still works for offline/local testing (`RELAY_SOURCE=json`). The Sheet
-currently holds placeholder/test values, not real ATS numbers yet.
+Sheet (no Form, values are typed in directly) via `gspread` — see
+`docs/relay-setup.md` for the setup and the current full 10-column schema.
+All 10 columns exist on the live Sheet now, but the Weekly Bias/Daily
+Bias cells currently hold a placeholder ("1") rather than
+bullish/bearish/neutral, which the parser correctly rejects rather than
+guessing — swap in real values (or "bullish"/"bearish"/"neutral" test
+values) to get the orchestrator running end-to-end again.
+`JSONFileRelaySource` still works for offline/local testing
+(`RELAY_SOURCE=json`).
+
+**`news_calendar.py`** (added 2026-09-15) — populates `filters.py`'s news
+blackout list. `ForexFactoryCalendarSource` reads a free, no-signup JSON
+mirror of the ForexFactory calendar (confirmed live), filtered to
+High-impact USD/EUR events. Not an official API and rate-limited — a
+second fetch within the same minute during testing got 403 then 429 — so
+`orchestrator.py` fails open (warns, proceeds with an empty blackout list)
+rather than blocking evaluation on it. Fine for now; cache/throttle this
+once it runs on a real timer instead of a one-shot script (see module
+docstring).
 
 ## What's stubbed, and why
 
@@ -86,13 +97,9 @@ checklist is done.
 **Not started at all:**
 - Order execution (cTrader Open API integration) — nothing places a real
   order yet; `orchestrator.py` only logs what it *would* do.
-- Candle history fetch for `bias.py` to run on live data (it's tested with
-  hand-built fixtures, not wired to a real data source yet).
-- The actual trailing-stop rule ("after a new higher-low forms, move stop
-  below it") — `trade_manager._trail_stop()` is a deliberate no-op stub;
-  see Open Questions below.
-- An economic calendar feed for the news blackout filter — `filters.py`
-  takes a plain list of event times; nothing populates that list yet.
+- Candle history fetch for `bias.py` to run on live data — moot now, see
+  the `bias.py` note above; this was only needed if `bias.py` ever got
+  wired into the live pipeline, which it doesn't.
 
 ## Open questions to resolve before this goes further
 
@@ -124,8 +131,14 @@ called from `orchestrator.py` or `decision_engine.py`), so it's now
 dead code rather than a blocker; safe to leave as-is or remove later,
 doesn't need further work.
 
-1. **News calendar source.** Needs an actual feed (a scraped calendar, a
-   paid API) to populate the blackout list — nothing chosen yet.
+~~**News calendar source.**~~ Resolved 2026-09-15: `news_calendar.py`'s
+`ForexFactoryCalendarSource` populates the blackout list from a free,
+no-signup community feed, filtered to High-impact USD/EUR events. Not an
+official API and rate-limited (see `news_calendar.py`), so treat it as
+"good enough for now," not a permanent choice — swap for a paid API later
+without touching `filters.py`, same swappable-source pattern as the relay.
+
+No open questions remain that need the trader's input right now.
 
 ## Project layout
 
@@ -135,13 +148,14 @@ src/
   risk_sizing.py      position sizing from the 0.5% risk rule
   decision_engine.py  entry logic (BUY/SELL/WAIT/NO_TRADE)
   stop_placement.py   initial stop from the OB projection level
-  trade_manager.py    partial close / breakeven / full close / never-widen
-  bias.py             weekly/daily bias + trend from swing structure
+  trade_manager.py    partial close / breakeven / full close / never-widen / trailing
+  bias.py             candle-based trend classification — real, tested, but UNUSED (see note above)
   filters.py          trading day / session / news blackout gate
   relay_poller.py     where the manually-relayed ATS numbers come from
+  news_calendar.py    populates the news blackout list (ForexFactory feed)
   webhook_receiver.py FastAPI endpoint for ATS MTF Trend V1 alerts
   orchestrator.py     ties it together, dry-run only (no order placement)
 pine/
   ats_trend_webhook.pine  companion Pine Script for webhook_receiver.py — drafted, unverified (see docs/pine-script-verification-checklist.md)
-tests/                59 tests, one file per src module (except stop_placement)
+tests/                90 tests, one file per src module, plus test_trade_manager_lifecycle.py
 ```

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 from . import decision_engine, filters, trade_manager
 from .models import MarketState, Trend
+from .news_calendar import ForexFactoryCalendarSource, NewsCalendarSource
 from .relay_poller import GoogleSheetRelaySource, JSONFileRelaySource, RelaySource
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -35,8 +36,6 @@ GOOGLE_SHEET_ID = os.environ.get(
 GOOGLE_SHEET_CREDENTIALS_PATH = os.environ.get(
     "RELAY_SHEET_CREDENTIALS_PATH", "forex-trading-bot-508116-b2c039d424d0.json"
 )
-
-HIGH_IMPACT_NEWS_EVENTS: list[datetime] = []  # TODO: wire up a real economic calendar source
 
 
 def build_market_state(
@@ -72,8 +71,8 @@ def build_market_state(
     )
 
 
-def evaluate_once(state: MarketState) -> None:
-    can_trade, reason = filters.can_trade_now(state.timestamp, HIGH_IMPACT_NEWS_EVENTS)
+def evaluate_once(state: MarketState, high_impact_events: list[datetime]) -> None:
+    can_trade, reason = filters.can_trade_now(state.timestamp, high_impact_events)
     if not can_trade:
         logger.info("No-trade window: %s", reason)
         return
@@ -82,6 +81,23 @@ def evaluate_once(state: MarketState) -> None:
     logger.info("Decision: %s — %s", decision.action, decision.reason)
     # Sizing/order placement happen from here once decision.action is BUY/SELL
     # and a broker integration exists (see README "Not yet built").
+
+
+def fetch_high_impact_event_times(source: NewsCalendarSource) -> list[datetime]:
+    """Wraps a NewsCalendarSource for filters.can_trade_now(), which just
+    wants plain datetimes. Fails open (empty list, logged) rather than
+    blocking the whole evaluation on a third-party feed being unreachable —
+    see news_calendar.py: this isn't an official/guaranteed-uptime API."""
+    try:
+        events = source.get_high_impact_events()
+    except Exception:
+        logger.warning(
+            "Couldn't fetch the news calendar — proceeding with an empty "
+            "blackout list this run.",
+            exc_info=True,
+        )
+        return []
+    return [event.time for event in events]
 
 
 if __name__ == "__main__":
@@ -103,4 +119,5 @@ if __name__ == "__main__":
         current_price=1.15700,
         trend=Trend.BULLISH,
     )
-    evaluate_once(demo_state)
+    high_impact_events = fetch_high_impact_event_times(ForexFactoryCalendarSource())
+    evaluate_once(demo_state, high_impact_events)
