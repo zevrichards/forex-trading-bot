@@ -8,13 +8,17 @@ that changes (vendor adds an alert/webhook feature, or doesn't), these
 values come from the trader manually, via whatever the simplest possible
 relay mechanism turns out to be.
 
-Three more values joined this relay for a different reason, not an ATS
+Several more values joined this relay for a different reason, not an ATS
 API limitation but a "the trader reads this visually and can't reduce it
 to a formula" one: stop_buffer_pips (2026-09-15, docs/trader-strategy-source.md
 item 15), weekly_bias/daily_bias (2026-09-15 — never had a computation
 path in code to begin with), and structure_stop_level (2026-09-15, for
 trade_manager._trail_stop — asking the trader to define "swing point"
-directly didn't work; see the 2026-09-15 conversation log).
+directly didn't work; see the 2026-09-15 conversation log). prev_box_high/
+prev_box_low (2026-09-15) joined for the same "he already sees it on his
+chart" reasoning — they feed bias.classify_trend_from_boxes(), the
+box-to-box trend classifier that replaced an earlier candle-fractal
+approach confirmed the wrong shape (see bias.py, docs/master-pattern-course-notes.md).
 
 This module defines one interface (RelaySource) so the rest of the system
 never needs to know or care where the numbers physically come from. Two
@@ -44,6 +48,8 @@ from .models import Bias
 class RelayValues:
     box_high: float
     box_low: float
+    prev_box_high: float
+    prev_box_low: float
     buy_liquidity: float
     sell_liquidity: float
     ob_projection_level: float
@@ -62,13 +68,14 @@ class RelaySource(ABC):
 
 
 class JSONFileRelaySource(RelaySource):
-    """Reads {"box_high": ..., "box_low": ..., "buy_liquidity": ...,
-    "sell_liquidity": ..., "ob_projection_level": ..., "stop_buffer_pips": ...,
-    "weekly_bias": "bullish"|"bearish"|"neutral", "daily_bias": same,
-    "relayed_at": "<ISO8601>", "structure_stop_level": <number, optional>}
-    from a local file. Useful for local dev, testing, and as a manual
-    stand-in before the real form/sheet exists — the trader (or you, for now)
-    can literally hand-edit this file.
+    """Reads {"box_high": ..., "box_low": ..., "prev_box_high": ...,
+    "prev_box_low": ..., "buy_liquidity": ..., "sell_liquidity": ...,
+    "ob_projection_level": ..., "stop_buffer_pips": ..., "weekly_bias":
+    "bullish"|"bearish"|"neutral", "daily_bias": same, "relayed_at":
+    "<ISO8601>", "structure_stop_level": <number, optional>} from a local
+    file. Useful for local dev, testing, and as a manual stand-in before
+    the real form/sheet exists — the trader (or you, for now) can
+    literally hand-edit this file.
     """
 
     def __init__(self, path: str | Path):
@@ -83,6 +90,8 @@ class JSONFileRelaySource(RelaySource):
         return RelayValues(
             box_high=data["box_high"],
             box_low=data["box_low"],
+            prev_box_high=data["prev_box_high"],
+            prev_box_low=data["prev_box_low"],
             buy_liquidity=data["buy_liquidity"],
             sell_liquidity=data["sell_liquidity"],
             ob_projection_level=data["ob_projection_level"],
@@ -100,19 +109,23 @@ class GoogleSheetRelaySource(RelaySource):
     Expects a plain sheet with a header row and one data row per relayed
     update, columns in this exact order:
 
-        Timestamp | Box High | Box Low | Buy-side Liquidity | Sell-side Liquidity | OB Projection Level | Stop Buffer (pips) | Weekly Bias | Daily Bias | Structure Stop Level
+        Timestamp | Box High | Box Low | Previous Box High | Previous Box Low | Buy-side Liquidity | Sell-side Liquidity | OB Projection Level | Stop Buffer (pips) | Weekly Bias | Daily Bias | Structure Stop Level
 
-    Weekly Bias / Daily Bias are typed as "bullish", "bearish", or "neutral"
-    (case-insensitive). Structure Stop Level is optional — leave the cell
-    blank when there's no new higher-low/lower-high to trail the stop to yet;
-    only fill it in when the trader would actually move the stop.
+    Previous Box High/Low is the immediately preceding confirmed
+    contraction box (visible on the trader's chart alongside the current
+    one) — feeds bias.classify_trend_from_boxes() for the box-to-box trend
+    comparison. Weekly Bias / Daily Bias are typed as "bullish", "bearish",
+    or "neutral" (case-insensitive). Structure Stop Level is optional —
+    leave the cell blank when there's no new higher-low/lower-high to
+    trail the stop to yet; only fill it in when the trader would actually
+    move the stop.
 
-    Stop Buffer (pips), Weekly Bias, Daily Bias, and Structure Stop Level are
-    all relayed rather than computed by the bot — see
-    docs/trader-strategy-source.md and the 2026-09-15 conversation log for
-    why: the trader reads all of these visually off his charts, and neither
-    "swing point" nor a fixed buffer number translate to how he actually
-    thinks about the chart.
+    Stop Buffer (pips), Weekly Bias, Daily Bias, Structure Stop Level, and
+    Previous Box High/Low are all relayed rather than computed by the bot
+    — see docs/trader-strategy-source.md and the 2026-09-15 conversation
+    log for why: the trader reads all of these visually off his charts,
+    and neither "swing point" nor a fixed buffer number translate to how
+    he actually thinks about the chart.
 
     Column A (Timestamp) is typed in by whoever adds the row — see
     docs/relay-setup.md for the exact format. Building the Sheet and the
@@ -166,17 +179,18 @@ class GoogleSheetRelaySource(RelaySource):
                 "empty) — nothing has been entered yet."
             )
         last_row = rows[-1]
-        if len(last_row) < 9:
+        if len(last_row) < 11:
             raise ValueError(
                 f"Sheet {source}'s last row has {len(last_row)} columns, expected "
-                f"at least 9 (Timestamp, Box High/Low, Buy/Sell Liquidity, OB "
-                f"Projection, Stop Buffer, Weekly/Daily Bias — Structure Stop "
-                f"Level is an optional 10th): {last_row!r}"
+                f"at least 11 (Timestamp, Box High/Low, Previous Box High/Low, "
+                f"Buy/Sell Liquidity, OB Projection, Stop Buffer, Weekly/Daily "
+                f"Bias — Structure Stop Level is an optional 12th): {last_row!r}"
             )
         timestamp_str = last_row[0]
-        box_high, box_low, buy_liq, sell_liq, ob_proj, buffer_pips = last_row[1:7]
-        weekly_bias_str, daily_bias_str = last_row[7:9]
-        structure_stop_str = last_row[9] if len(last_row) > 9 else ""
+        box_high, box_low, prev_box_high, prev_box_low = last_row[1:5]
+        buy_liq, sell_liq, ob_proj, buffer_pips = last_row[5:9]
+        weekly_bias_str, daily_bias_str = last_row[9:11]
+        structure_stop_str = last_row[11] if len(last_row) > 11 else ""
 
         try:
             relayed_at = _parse_sheet_timestamp(timestamp_str)
@@ -198,6 +212,8 @@ class GoogleSheetRelaySource(RelaySource):
             return RelayValues(
                 box_high=float(box_high),
                 box_low=float(box_low),
+                prev_box_high=float(prev_box_high),
+                prev_box_low=float(prev_box_low),
                 buy_liquidity=float(buy_liq),
                 sell_liquidity=float(sell_liq),
                 ob_projection_level=float(ob_proj),

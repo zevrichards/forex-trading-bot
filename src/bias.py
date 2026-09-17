@@ -1,68 +1,51 @@
 """
-Weekly/Daily bias and trend classification — computed from plain candle data,
-NOT from ATS. This is the one piece of "what is the chart telling us" that
-doesn't depend on relayed numbers or a TradingView webhook at all; it just
-needs OHLC history for the relevant timeframe (Weekly candles for weekly
-bias, Daily candles for daily bias).
+Trend classification — box-to-box comparison, per ATS's own "Master
+Pattern" framework. Confirmed 2026-09-15 from trade ATS's own training
+course (transcripts the trader sent, see docs/master-pattern-course-notes.md
+for the distilled quotes/citations):
 
-    "Bullish trend = HH + HL. Bearish trend = LL + LH."
+    "Contraction is identified as simultaneous lower highs and higher lows
+    at the same time, which is a contracting of a price range... Trend is
+    the price movement between the previous contraction point and a new
+    contraction point established at higher or lower prices."
 
-This uses a standard fractal swing-point method (a candle whose high is the
-highest of its `lookback` neighbors on each side counts as a swing high; low
-is the mirror). It is a reasonable, common definition, but it is Claude's
-implementation choice, not something the trader specified numerically —
-flag this to them and confirm it matches what they'd call a swing point by
-eye before trusting it for live trading. See README "Open questions."
+    "Bullish trend = HH + HL. Bearish trend = LL + LH." (the trader's own
+    quantified rule, docs/trader-strategy-source.md Part 2)
+
+An earlier version of this module tried to detect "swing points" from raw
+candle data using a 5-candle fractal method. That was confirmed wrong-
+shaped, not just unconfirmed: the trader doesn't think in isolated candle
+peaks ("swing point? you mean liquidity?", 2026-09-15 conversation log),
+and the course his own ATS indicator is built from defines structure in
+terms of the Box (contraction), not individual candles. This version
+instead compares the CURRENT box (box_high/box_low, already manually
+relayed every update) against the PREVIOUS confirmed box
+(prev_box_high/prev_box_low, relayed the same way, since both are visible
+on the trader's chart at any moment) — no candle-history fetch or fractal
+detection needed at all.
 """
 
 from __future__ import annotations
 
-from .models import Candle, Trend
-
-DEFAULT_LOOKBACK = 2
+from .models import Trend
 
 
-def find_swing_highs(candles: list[Candle], lookback: int = DEFAULT_LOOKBACK) -> list[int]:
-    """Returns the indices into `candles` that are swing highs."""
-    highs = []
-    for i in range(lookback, len(candles) - lookback):
-        window = candles[i - lookback : i + lookback + 1]
-        if candles[i].high == max(c.high for c in window):
-            highs.append(i)
-    return highs
-
-
-def find_swing_lows(candles: list[Candle], lookback: int = DEFAULT_LOOKBACK) -> list[int]:
-    """Returns the indices into `candles` that are swing lows."""
-    lows = []
-    for i in range(lookback, len(candles) - lookback):
-        window = candles[i - lookback : i + lookback + 1]
-        if candles[i].low == min(c.low for c in window):
-            lows.append(i)
-    return lows
-
-
-def classify_trend(candles: list[Candle], lookback: int = DEFAULT_LOOKBACK) -> Trend:
-    """Looks at the two most recent swing highs and two most recent swing
-    lows and classifies the trend per the trader's definition. Returns
-    NEUTRAL if there isn't enough clean structure yet (fewer than two of
-    either), or if highs and lows disagree (e.g. higher high but lower low —
-    a genuinely ambiguous market the decision engine should sit out of
-    rather than guess on).
+def classify_trend_from_boxes(
+    box_high: float,
+    box_low: float,
+    prev_box_high: float,
+    prev_box_low: float,
+) -> Trend:
+    """'Bullish trend = HH + HL. Bearish trend = LL + LH.' Compares the
+    current contraction box to the immediately preceding one. Returns
+    NEUTRAL if the boxes are identical, or if high/low disagree (e.g. a
+    higher high but a lower low) — a genuinely ambiguous market the
+    decision engine should sit out of rather than guess on.
     """
-    swing_high_idx = find_swing_highs(candles, lookback)
-    swing_low_idx = find_swing_lows(candles, lookback)
-
-    if len(swing_high_idx) < 2 or len(swing_low_idx) < 2:
-        return Trend.NEUTRAL
-
-    last_high, prev_high = candles[swing_high_idx[-1]].high, candles[swing_high_idx[-2]].high
-    last_low, prev_low = candles[swing_low_idx[-1]].low, candles[swing_low_idx[-2]].low
-
-    higher_high = last_high > prev_high
-    higher_low = last_low > prev_low
-    lower_high = last_high < prev_high
-    lower_low = last_low < prev_low
+    higher_high = box_high > prev_box_high
+    higher_low = box_low > prev_box_low
+    lower_high = box_high < prev_box_high
+    lower_low = box_low < prev_box_low
 
     if higher_high and higher_low:
         return Trend.BULLISH

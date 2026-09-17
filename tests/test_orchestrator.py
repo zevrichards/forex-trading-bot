@@ -12,9 +12,36 @@ import pytest
 
 from src.models import Bias, Direction, MarketState, Trend
 from src.order_execution import OrderExecutor, OrderResult
-from src.orchestrator import evaluate_once
+from src.orchestrator import build_market_state, evaluate_once
+from src.relay_poller import RelaySource, RelayValues
 
 NOW = datetime(2026, 9, 9, 10, 0, tzinfo=timezone.utc)  # Wednesday, inside London session
+
+
+class FakeRelaySource(RelaySource):
+    def __init__(self, values: RelayValues):
+        self._values = values
+
+    def get_latest(self) -> RelayValues:
+        return self._values
+
+
+def make_relay_values(**overrides) -> RelayValues:
+    defaults = dict(
+        box_high=1.16600,
+        box_low=1.16400,
+        prev_box_high=1.16500,
+        prev_box_low=1.16300,
+        buy_liquidity=1.16300,
+        sell_liquidity=1.16700,
+        ob_projection_level=1.16100,
+        stop_buffer_pips=3.0,
+        weekly_bias=Bias.BULLISH,
+        daily_bias=Bias.BULLISH,
+        relayed_at=NOW,
+    )
+    defaults.update(overrides)
+    return RelayValues(**defaults)
 
 
 class RecordingOrderExecutor(OrderExecutor):
@@ -36,6 +63,8 @@ def make_state(**overrides) -> MarketState:
         current_price=1.16300,
         box_high=1.16600,
         box_low=1.16400,
+        prev_box_high=1.16500,
+        prev_box_low=1.16300,
         buy_liquidity=1.16300,
         sell_liquidity=1.16700,
         ob_projection_level=1.16100,
@@ -120,3 +149,41 @@ def test_sell_decision_places_a_short_order():
     assert executor.calls[0].direction == Direction.SHORT
     # stop = ob_projection_level(1.16100) + buffer(0.0003) = 1.16130
     assert executor.calls[0].stop_price == pytest.approx(1.16130)
+
+
+def test_build_market_state_computes_trend_from_boxes_by_default():
+    relay = FakeRelaySource(make_relay_values(box_high=1.16700, box_low=1.16500))
+    # box (1.16700/1.16500) > prev box (1.16500/1.16300) on both ends -> bullish
+
+    state = build_market_state(relay_source=relay, current_price=1.16600)
+
+    assert state.trend == Trend.BULLISH
+
+
+def test_build_market_state_bearish_boxes():
+    relay = FakeRelaySource(make_relay_values(box_high=1.16400, box_low=1.16200))
+    # box (1.16400/1.16200) < prev box (1.16500/1.16300) on both ends -> bearish
+
+    state = build_market_state(relay_source=relay, current_price=1.16300)
+
+    assert state.trend == Trend.BEARISH
+
+
+def test_build_market_state_explicit_trend_overrides_computed_one():
+    relay = FakeRelaySource(make_relay_values(box_high=1.16700, box_low=1.16500))
+    # Boxes alone would compute BULLISH -- explicit override should win.
+
+    state = build_market_state(
+        relay_source=relay, current_price=1.16600, trend=Trend.NEUTRAL
+    )
+
+    assert state.trend == Trend.NEUTRAL
+
+
+def test_build_market_state_carries_prev_box_fields_through():
+    relay = FakeRelaySource(make_relay_values())
+
+    state = build_market_state(relay_source=relay, current_price=1.16500)
+
+    assert state.prev_box_high == 1.16500
+    assert state.prev_box_low == 1.16300

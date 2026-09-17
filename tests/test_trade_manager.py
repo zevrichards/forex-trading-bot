@@ -28,6 +28,8 @@ def make_state(**overrides) -> MarketState:
         current_price=1.16700,
         box_high=1.16600,
         box_low=1.16400,
+        prev_box_high=1.16500,
+        prev_box_low=1.16300,
         buy_liquidity=1.16300,
         sell_liquidity=1.16700,
         ob_projection_level=1.16100,

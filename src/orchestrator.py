@@ -17,7 +17,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from . import decision_engine, filters, risk_sizing, stop_placement, trade_manager
+from . import bias, decision_engine, filters, risk_sizing, stop_placement, trade_manager
 from .models import Direction, MarketState, Trend
 from .news_calendar import ForexFactoryCalendarSource, NewsCalendarSource
 from .order_execution import LoggingOrderExecutor, OrderExecutor, build_order_request
@@ -48,32 +48,44 @@ ACCOUNT_BALANCE = float(os.environ.get("ACCOUNT_BALANCE", "100000"))
 def build_market_state(
     relay_source: RelaySource,
     current_price: float,
-    trend: Trend,
+    trend: Trend | None = None,
     symbol: str = "EURUSD",
 ) -> MarketState:
     """Combines two independent data sources into one MarketState: relayed
-    values (box/liquidity/OB projection/stop buffer/weekly+daily bias/
-    structure stop level — all read visually off the trader's charts, see
-    relay_poller.py) and live current price. `trend` is the one field NOT
-    in the relay — it's meant to come from ATS MTF Trend V1 via the webhook
-    receiver's /trend/latest once that Pine Script is verified (see
-    docs/pine-script-verification-checklist.md); passed in explicitly here
-    until then, and to keep this function easy to unit test.
+    values (box/prev-box/liquidity/OB projection/stop buffer/weekly+daily
+    bias/structure stop level — all read visually off the trader's charts,
+    see relay_poller.py) and live current price.
+
+    `trend` defaults to None, in which case it's computed from the relayed
+    box/prev-box values via bias.classify_trend_from_boxes() — see bias.py
+    for why that replaced an earlier candle-fractal approach. Pass it
+    explicitly to override (e.g. once ATS MTF Trend V1 via the webhook
+    receiver's /trend/latest is verified, see
+    docs/pine-script-verification-checklist.md, or for easy unit testing).
     """
     relay = relay_source.get_latest()
+    resolved_trend = (
+        trend
+        if trend is not None
+        else bias.classify_trend_from_boxes(
+            relay.box_high, relay.box_low, relay.prev_box_high, relay.prev_box_low
+        )
+    )
     return MarketState(
         symbol=symbol,
         timestamp=datetime.now(timezone.utc),
         current_price=current_price,
         box_high=relay.box_high,
         box_low=relay.box_low,
+        prev_box_high=relay.prev_box_high,
+        prev_box_low=relay.prev_box_low,
         buy_liquidity=relay.buy_liquidity,
         sell_liquidity=relay.sell_liquidity,
         ob_projection_level=relay.ob_projection_level,
         stop_buffer_pips=relay.stop_buffer_pips,
         weekly_bias=relay.weekly_bias,
         daily_bias=relay.daily_bias,
-        trend=trend,
+        trend=resolved_trend,
         structure_stop_level=relay.structure_stop_level,
     )
 
@@ -151,10 +163,10 @@ def fetch_high_impact_event_times(source: NewsCalendarSource) -> list[datetime]:
 
 if __name__ == "__main__":
     # Manual smoke-test entry point. Reads from the real Google Sheet relay
-    # (see docs/relay-setup.md) — weekly/daily bias now come from there too.
-    # trend still hard-coded, since the webhook receiver isn't wired into
-    # this loop yet. Set RELAY_SOURCE=json to fall back to relay_data.json
-    # (relay_poller.JSONFileRelaySource) for offline/local testing instead.
+    # (see docs/relay-setup.md) — weekly/daily bias and trend (via box-to-box
+    # comparison) now come from there too. Set RELAY_SOURCE=json to fall
+    # back to relay_data.json (relay_poller.JSONFileRelaySource) for
+    # offline/local testing instead.
     if os.environ.get("RELAY_SOURCE") == "json":
         relay_source = JSONFileRelaySource(RELAY_FILE_PATH)
     else:
@@ -166,7 +178,6 @@ if __name__ == "__main__":
     demo_state = build_market_state(
         relay_source=relay_source,
         current_price=1.15700,
-        trend=Trend.BULLISH,
     )
     high_impact_events = fetch_high_impact_event_times(ForexFactoryCalendarSource())
     evaluate_once(demo_state, high_impact_events, order_executor=LoggingOrderExecutor())

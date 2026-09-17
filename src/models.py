@@ -40,24 +40,27 @@ class Direction(str, Enum):
 class MarketState:
     """A snapshot of everything the decision engine needs, at one point in time.
 
-    box_high / box_low / buy_liquidity / sell_liquidity / ob_projection_level /
-    stop_buffer_pips / weekly_bias / daily_bias / structure_stop_level are all
-    manually relayed (see relay_poller.py) — the trader reads all of them
-    visually off ATS/his charts, so none of them are computed from raw candle
-    data. stop_buffer_pips is relayed rather than a fixed constant because the
+    box_high / box_low / prev_box_high / prev_box_low / buy_liquidity /
+    sell_liquidity / ob_projection_level / stop_buffer_pips / weekly_bias /
+    daily_bias / structure_stop_level are all manually relayed (see
+    relay_poller.py) — the trader reads all of them visually off ATS/his
+    charts, so none of them are computed from raw candle data.
+    stop_buffer_pips is relayed rather than a fixed constant because the
     stop buffer is structural/contextual, not one universal pip number.
     weekly_bias/daily_bias are relayed rather than computed because the
     trader's own rules describe them as a visual read of ATS's trend line +
     colored dots + structure, not a formula. structure_stop_level is the
     current higher-low (longs) / lower-high (shorts) the trader would trail
-    the stop to, relayed the same way, since detecting that algorithmically
-    turned out to be the same "ask him to explain a concept he doesn't think
-    in those terms" problem as the others (see docs/trader-strategy-source.md
-    and the 2026-09-15 conversation log). bias.py's candle-based classify_trend()
-    predates this and is not wired into the live pipeline.
+    the stop to, relayed the same way. prev_box_high/prev_box_low (the
+    immediately preceding confirmed contraction box, also always visible on
+    his chart) exist so bias.py can classify trend as a box-to-box
+    comparison — see bias.py's module docstring for why that replaced an
+    earlier candle-fractal approach that was confirmed the wrong shape.
 
-    trend comes from "ATS MTF Trend V1", which IS live-readable (see webhook_receiver.py)
-    — the one field here that isn't manually relayed.
+    trend comes from bias.classify_trend_from_boxes() by default
+    (orchestrator.py), or from "ATS MTF Trend V1" via webhook_receiver.py
+    once that Pine Script is verified — the one field here that can come
+    from a live feed instead of the relay.
     """
 
     symbol: str
@@ -66,6 +69,8 @@ class MarketState:
 
     box_high: float
     box_low: float
+    prev_box_high: float
+    prev_box_low: float
     buy_liquidity: float   # blue dotted line
     sell_liquidity: float  # yellow dotted line
     ob_projection_level: float  # for stop placement
@@ -81,18 +86,6 @@ class MarketState:
     def value(self) -> float:
         """'Value is the middle of the Box.' Pure math — never relayed, always derived."""
         return (self.box_high + self.box_low) / 2.0
-
-
-@dataclass(frozen=True)
-class Candle:
-    """One OHLC bar on whatever timeframe the caller is using (Weekly or
-    Daily, for bias.py's purposes)."""
-
-    timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
 
 
 @dataclass

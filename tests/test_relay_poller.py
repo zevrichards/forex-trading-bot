@@ -25,6 +25,8 @@ HEADER = [
     "Timestamp",
     "Box High",
     "Box Low",
+    "Previous Box High",
+    "Previous Box Low",
     "Buy-side Liquidity",
     "Sell-side Liquidity",
     "OB Projection Level",
@@ -37,6 +39,8 @@ VALID_ROW = [
     "9/9/2026 10:00:00",
     "1.16600",
     "1.16400",
+    "1.16500",
+    "1.16300",
     "1.16300",
     "1.16700",
     "1.16100",
@@ -50,7 +54,8 @@ VALID_ROW = [
 def test_json_file_relay_source_reads_expected_fields(tmp_path):
     path = tmp_path / "relay_data.json"
     path.write_text(
-        '{"box_high": 1.166, "box_low": 1.164, "buy_liquidity": 1.163, '
+        '{"box_high": 1.166, "box_low": 1.164, "prev_box_high": 1.165, '
+        '"prev_box_low": 1.163, "buy_liquidity": 1.163, '
         '"sell_liquidity": 1.167, "ob_projection_level": 1.161, '
         '"stop_buffer_pips": 3.0, "weekly_bias": "bullish", '
         '"daily_bias": "bearish", "structure_stop_level": 1.15900, '
@@ -58,6 +63,8 @@ def test_json_file_relay_source_reads_expected_fields(tmp_path):
     )
     values = JSONFileRelaySource(path).get_latest()
     assert values.box_high == 1.166
+    assert values.prev_box_high == 1.165
+    assert values.prev_box_low == 1.163
     assert values.ob_projection_level == 1.161
     assert values.stop_buffer_pips == 3.0
     assert values.weekly_bias == Bias.BULLISH
@@ -69,7 +76,8 @@ def test_json_file_relay_source_reads_expected_fields(tmp_path):
 def test_json_file_relay_source_structure_stop_level_defaults_to_none(tmp_path):
     path = tmp_path / "relay_data.json"
     path.write_text(
-        '{"box_high": 1.166, "box_low": 1.164, "buy_liquidity": 1.163, '
+        '{"box_high": 1.166, "box_low": 1.164, "prev_box_high": 1.165, '
+        '"prev_box_low": 1.163, "buy_liquidity": 1.163, '
         '"sell_liquidity": 1.167, "ob_projection_level": 1.161, '
         '"stop_buffer_pips": 3.0, "weekly_bias": "bullish", '
         '"daily_bias": "bullish", '
@@ -133,6 +141,8 @@ def test_parse_rows_reads_last_row():
         "9/8/2026 09:00:00",
         "1.1",
         "1.0",
+        "1.08",
+        "0.98",
         "1.05",
         "1.15",
         "0.95",
@@ -148,6 +158,8 @@ def test_parse_rows_reads_last_row():
     assert values == RelayValues(
         box_high=1.166,
         box_low=1.164,
+        prev_box_high=1.165,
+        prev_box_low=1.163,
         buy_liquidity=1.163,
         sell_liquidity=1.167,
         ob_projection_level=1.161,
@@ -160,16 +172,16 @@ def test_parse_rows_reads_last_row():
 
 
 def test_parse_rows_structure_stop_level_populated():
-    row_with_level = VALID_ROW[:9] + ["1.15900"]
+    row_with_level = VALID_ROW[:11] + ["1.15900"]
     values = GoogleSheetRelaySource._parse_rows([HEADER, row_with_level], source="sheet123")
     assert values.structure_stop_level == 1.15900
 
 
 def test_parse_rows_structure_stop_level_column_missing_entirely():
-    """9-column row (no 10th column at all) — gspread can drop a trailing
+    """11-column row (no 12th column at all) — gspread can drop a trailing
     empty column rather than returning it as ''. Must still parse."""
-    row_without_10th = VALID_ROW[:9]
-    values = GoogleSheetRelaySource._parse_rows([HEADER, row_without_10th], source="sheet123")
+    row_without_12th = VALID_ROW[:11]
+    values = GoogleSheetRelaySource._parse_rows([HEADER, row_without_12th], source="sheet123")
     assert values.structure_stop_level is None
 
 
@@ -205,7 +217,7 @@ def test_parse_rows_bad_timestamp_raises_with_clear_message():
 
 def test_parse_rows_invalid_bias_raises_with_clear_message():
     bad_row = VALID_ROW.copy()
-    bad_row[7] = "sideways"
+    bad_row[9] = "sideways"
     with pytest.raises(ValueError, match="invalid Weekly/Daily Bias"):
         GoogleSheetRelaySource._parse_rows([HEADER, bad_row], source="sheet123")
 
