@@ -83,14 +83,13 @@ programmatically (see the WhatsApp conversation history / plan docs for
 the screen-share findings). `GoogleSheetRelaySource` reads the last row
 of a manually-maintained Google Sheet (no Form, values are typed in
 directly) via `gspread` — see `docs/relay-setup.md` for the setup and the
-current full 12-column schema. **The live Sheet is 2 columns behind the
-code** (needs Previous Box High/Low added), and its Weekly Bias/Daily
-Bias cells currently hold a placeholder ("1") rather than
-bullish/bearish/neutral, which the parser correctly rejects rather than
-guessing — swap in real values (or "bullish"/"bearish"/"neutral" test
-values) to get the orchestrator running end-to-end again.
-`JSONFileRelaySource` still works for offline/local testing
-(`RELAY_SOURCE=json`).
+current full 12-column schema. **Confirmed working end-to-end 2026-09-17**
+— live Sheet has all 12 columns in the correct order and valid test
+values; `build_market_state()` -> `evaluate_entry()` ran against the real
+Sheet and produced a correct decision. Still placeholder/test values, not
+real ATS numbers — swap those in whenever the trader starts actually
+relaying them. `JSONFileRelaySource` still works for offline/local
+testing (`RELAY_SOURCE=json`).
 
 **`news_calendar.py`** (added 2026-09-15) — populates `filters.py`'s news
 blackout list. `ForexFactoryCalendarSource` reads a free, no-signup JSON
