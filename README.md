@@ -6,7 +6,7 @@ an unresolved integration question, and clearly stubs the parts that do
 (the TradingView webhook, and the Google Sheet's newest columns) so
 nothing about them is guessed at.
 
-## What's built and tested (112 passing tests)
+## What's built and tested (121 passing tests)
 
 | Rule (the trader's words) | Module | Tested against |
 |---|---|---|
@@ -22,6 +22,7 @@ nothing about them is guessed at.
 | "News blackout: 15 min before, 30 min after" | `filters.py` | Before/after/outside the window |
 | *(no direct quote — this is plumbing, not a rule)* | `orchestrator.py` | Full pipeline wiring: BUY/SELL -> stop -> lot size -> order, and that WAIT/NO_TRADE/filtered-out cases never reach the order executor |
 | *(no direct quote — cTrader Open API's own message format)* | `order_execution.py` | Request-building tested against the real installed `ctrader-open-api` package, not a mock — see note below |
+| "ATS MTF Trend V1" webhook payload | `webhook_receiver.py` | Bullish/bearish/trend_end mapping, unrecognized-signal fail-safe (logged, not silent), overwrite-on-new-alert, malformed-payload 422 |
 
 Run the tests yourself: `pip install -r requirements.txt && pytest -v`
 
@@ -51,6 +52,17 @@ raises `NotImplementedError` rather than guessing at connection-lifecycle
 code that can't be tested. `orchestrator.py` defaults to
 `LoggingOrderExecutor` (dry-run), consistent with "nothing places a real
 order yet."
+
+**cTrader setup, 2026-09-18:** `docs/ctrader-setup-guide.md` walks the
+developer through the account/app-registration steps only they can do
+(researched against the official docs and the `ctrader-open-api`
+package's own sample code, not guessed), and
+`scripts/ctrader_discover_account.py` is a one-shot tool that, once
+credentials exist, discovers the `ctidTraderAccountId` and EURUSD's
+`symbolId` `CTraderOrderExecutor` needs. Every import, method, and
+protobuf field name in that script was verified against the actual
+installed package before being used — but the script itself hasn't been
+run against a live account, since none exists yet.
 
 One real bug got caught during this build, worth knowing about: the
 trader's own worked example (30 pips -> 1.67 lots) technically risks $501,
@@ -104,11 +116,16 @@ docstring).
 ## What's stubbed, and why
 
 **`webhook_receiver.py`** — receiving ATS MTF Trend V1's bias signal, which
-*is* confirmed live-readable. The endpoint works (tested). A companion Pine
-Script now exists too (`pine/ats_trend_webhook.pine`), reading ATS MTF
-Trend V1 via `input.source()` and firing `alertcondition()`s whose message
-payload matches this endpoint's schema exactly. What's not done: the
-script has never been compiled or run against the real indicator — see
+*is* confirmed live-readable. The endpoint itself now actually has test
+coverage (`tests/test_webhook_receiver.py`, added 2026-09-18 — there was
+none before despite this doc previously claiming "tested"). Also added:
+an unrecognized signal now logs a warning instead of silently mapping to
+NEUTRAL with no trace, so a schema mismatch with the real Pine Script
+alert won't be invisible. A companion Pine Script now exists too
+(`pine/ats_trend_webhook.pine`), reading ATS MTF Trend V1 via
+`input.source()` and firing `alertcondition()`s whose message payload
+matches this endpoint's schema exactly. What's not done: the script has
+never been compiled or run against the real indicator — see
 `docs/pine-script-verification-checklist.md` for what's unconfirmed
 (mainly whether ATS's plots behave the simple on/off way the script
 assumes). Treat the payload schema
@@ -190,5 +207,7 @@ src/
   orchestrator.py     full pipeline: filters -> decision -> stop -> size -> order (dry-run by default)
 pine/
   ats_trend_webhook.pine  companion Pine Script for webhook_receiver.py — drafted, unverified (see docs/pine-script-verification-checklist.md)
-tests/                112 tests, one file per src module, plus test_trade_manager_lifecycle.py and test_orchestrator.py
+scripts/
+  ctrader_discover_account.py  one-shot setup tool, not part of the runtime — see docs/ctrader-setup-guide.md
+tests/                121 tests, one file per src module, plus test_trade_manager_lifecycle.py and test_orchestrator.py
 ```

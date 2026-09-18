@@ -20,12 +20,15 @@ stack preference.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from .models import Trend
+
+logger = logging.getLogger("webhook_receiver")
 
 app = FastAPI(title="EUR/USD bot — TradingView webhook receiver")
 
@@ -66,9 +69,21 @@ def get_latest_trend() -> dict:
 
 
 def _parse_signal(signal: str) -> Trend:
+    """Unrecognized signals fail safe to NEUTRAL (decision_engine.py's
+    trend gate blocks entries on NEUTRAL, so this can't trigger a wrong
+    trade) but are logged loudly — silently swallowing an unexpected
+    payload would hide exactly the kind of Pine-script/schema mismatch
+    docs/pine-script-verification-checklist.md exists to catch."""
     mapping = {
         "bullish_trend": Trend.BULLISH,
         "bearish_trend": Trend.BEARISH,
         "trend_end": Trend.NEUTRAL,
     }
+    if signal not in mapping:
+        logger.warning(
+            "Unrecognized TradingView signal %r — treating as NEUTRAL. "
+            "Expected one of %s.",
+            signal,
+            sorted(mapping),
+        )
     return mapping.get(signal, Trend.NEUTRAL)
